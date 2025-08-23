@@ -1,0 +1,970 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../models/dream.dart';
+import '../../models/long_term.dart';
+import '../../models/short_term.dart';
+import '../../providers/db_provider.dart';
+import '../../providers/goal_providers.dart';
+import '../../providers/task_providers.dart';
+import '../goals/goals_page.dart' show ShortTermDetailSheet; // reuse sheet
+import '../todo/goal_todo_page.dart';
+import '../goals/tags_page.dart';
+import '../../models/tag.dart';
+import '../../repositories/goal_repositories.dart';
+import '../../providers/goal_providers.dart' as gp;
+
+class MapsPage extends ConsumerWidget {
+  const MapsPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final init = ref.watch(isarInitProvider);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Maps'),
+        actions: [
+          IconButton(
+            tooltip: 'タグ管理',
+            icon: const Icon(Icons.label_outline),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TagsPage()),
+              );
+            },
+          ),
+          IconButton(
+            onPressed: () async {
+              final title = await _askTitle(context, '夢を追加');
+              if (title != null) {
+                await ref.read(dreamRepoProvider).put(Dream(title: title));
+              }
+            },
+            icon: const Icon(Icons.add),
+            tooltip: '夢を追加',
+          ),
+        ],
+      ),
+      body: init.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('DB初期化エラー: $e')),
+        data: (_) => const _MapCanvas(),
+      ),
+    );
+  }
+}
+
+class _MapCanvas extends ConsumerStatefulWidget {
+  const _MapCanvas();
+
+  @override
+  ConsumerState<_MapCanvas> createState() => _MapCanvasState();
+}
+
+class _MapCanvasState extends ConsumerState<_MapCanvas> {
+  final TransformationController _tc = TransformationController();
+  int _layoutHash = 0;
+  static const double _minScale = 0.3;
+  static const double _maxScale = 2.5;
+
+  @override
+  void dispose() {
+    _tc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
+    final longs = ref.watch(allLongTermsProvider).value ?? const <LongTerm>[];
+    final shorts = ref.watch(allShortTermsProvider).value ?? const <ShortTerm>[];
+
+    // Build hierarchy
+    final nodes = <_Node>[];
+    for (final d in dreams) {
+      nodes.add(_Node.level0(d));
+      final childrenL = longs.where((l) => l.dreamId == d.id).toList();
+      for (final l in childrenL) {
+        nodes.add(_Node.level1(l, parentId: d.id));
+        final childrenS = shorts.where((s) => s.longTermId == l.id).toList();
+        for (final s in childrenS) {
+          nodes.add(_Node.level2(s, parentId: l.id));
+        }
+      }
+    }
+
+    // Layout constants
+    const nodeW = 160.0;
+    const nodeH = 150.0;
+    const hGap = 60.0;
+    const vGap = 140.0;
+    const pad = 60.0;
+
+    // Determine positions
+    final dreamIds = dreams.map((e) => e.id).toList();
+    final positions = <String, Offset>{};
+    // First pass positions (may include negative values)
+    double minX = double.infinity, minY = double.infinity;
+    double maxX = -double.infinity, maxY = -double.infinity;
+    // Pre-calc canvas height from rows
+    double totalHeight = pad * 2 + nodeH * 3 + vGap * 2;
+
+    for (var i = 0; i < dreamIds.length; i++) {
+      final dx = pad + i * (nodeW + 240);
+      positions['dream:${dreamIds[i]}'] = Offset(dx, pad);
+      minX = math.min(minX, dx);
+      minY = math.min(minY, pad);
+      maxX = math.max(maxX, dx + nodeW);
+      maxY = math.max(maxY, pad + nodeH);
+      final lp = longs.where((l) => l.dreamId == dreamIds[i]).toList();
+      if (lp.isEmpty) continue;
+      final baseX = dx - ((lp.length - 1) / 2) * (nodeW + hGap);
+      for (var j = 0; j < lp.length; j++) {
+        final lx = baseX + j * (nodeW + hGap);
+        final ly = pad + nodeH + vGap;
+        positions['long:${lp[j].id}'] = Offset(lx, ly);
+        minX = math.min(minX, lx);
+        minY = math.min(minY, ly);
+        maxX = math.max(maxX, lx + nodeW);
+        maxY = math.max(maxY, ly + nodeH);
+        final sp = shorts.where((s) => s.longTermId == lp[j].id).toList();
+        if (sp.isEmpty) continue;
+        final sBaseX = lx - ((sp.length - 1) / 2) * (nodeW + hGap / 2);
+        for (var k = 0; k < sp.length; k++) {
+          final sx = sBaseX + k * (nodeW + hGap / 2);
+          final sy = pad + (nodeH + vGap) * 2;
+          positions['short:${sp[k].id}'] = Offset(sx, sy);
+          minX = math.min(minX, sx);
+          minY = math.min(minY, sy);
+          maxX = math.max(maxX, sx + nodeW);
+          maxY = math.max(maxY, sy + nodeH);
+        }
+      }
+    }
+
+    // Handle empty case
+    if (positions.isEmpty) {
+      minX = 0;
+      minY = 0;
+      maxX = 600;
+      maxY = totalHeight;
+    }
+
+    // Normalize positions so that all nodes are within padding
+    final shiftX = pad - math.min(minX, pad);
+    final shiftY = pad - math.min(minY, pad);
+    final normalized = <String, Offset>{
+      for (final e in positions.entries) e.key: e.value + Offset(shiftX, shiftY)
+    };
+
+    final contentWidth = (maxX - minX) + pad * 2;
+    final contentHeight = (maxY - minY) + pad * 2;
+
+    // Build edges list
+    final edges = <(_Node, _Node)>[];
+    for (final n in nodes) {
+      if (n.level == 1) {
+        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 0, orElse: () => _Node.empty());
+        if (!p.isEmpty) edges.add((p, n));
+      } else if (n.level == 2) {
+        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1, orElse: () => _Node.empty());
+        if (!p.isEmpty) edges.add((p, n));
+      }
+    }
+
+    // Canvas with pan/zoom
+    // Fit-to-view setup
+    final newHash = nodes.fold<int>(0, (acc, n) => acc ^ n.id ^ (n.level << 4) ^ n.type.hashCode);
+
+    return LayoutBuilder(builder: (context, viewport) {
+      // Auto-fit on content change
+      if (newHash != _layoutHash && contentWidth > 0 && contentHeight > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _layoutHash = newHash;
+          _fitToView(Size(viewport.maxWidth, viewport.maxHeight), contentWidth, contentHeight);
+        });
+      }
+
+      void zoomIn() => _zoomTo((_tc.value.getMaxScaleOnAxis() * 1.2).clamp(_minScale, _maxScale));
+      void zoomOut() => _zoomTo((_tc.value.getMaxScaleOnAxis() / 1.2).clamp(_minScale, _maxScale));
+      void fit() => _fitToView(Size(viewport.maxWidth, viewport.maxHeight), contentWidth, contentHeight);
+
+      return Stack(
+        children: [
+          InteractiveViewer(
+            transformationController: _tc,
+            minScale: _minScale,
+            maxScale: _maxScale,
+            constrained: false,
+            boundaryMargin: const EdgeInsets.all(1000),
+            clipBehavior: Clip.none,
+            child: Stack(
+              children: [
+                SizedBox(width: contentWidth, height: contentHeight),
+                // Edges
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _EdgesPainter(
+                      nodes: nodes,
+                      positions: normalized,
+                      nodeSize: const Size(nodeW, nodeH),
+                      edges: edges,
+                    ),
+                  ),
+                ),
+                // Nodes
+                ...nodes.map((n) {
+                  final pos = normalized['${n.type}:${n.id}'] ?? const Offset(0, 0);
+                  return Positioned(
+                    left: pos.dx,
+                    top: pos.dy,
+                    width: nodeW,
+                    height: nodeH,
+                    child: _NodeCard(node: n),
+                  );
+                }),
+              ],
+            ),
+          ),
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: _ZoomControls(onIn: zoomIn, onOut: zoomOut, onFit: fit),
+          ),
+        ],
+      );
+    });
+  }
+
+  void _zoomTo(double targetScale) {
+    final current = _tc.value.getMaxScaleOnAxis();
+    if (current == targetScale) return;
+    final factor = targetScale / current;
+    final m = _tc.value.clone()..scale(factor);
+    _tc.value = m;
+  }
+
+  void _fitToView(Size viewport, double contentWidth, double contentHeight) {
+    final vw = viewport.width;
+    final vh = viewport.height;
+    final scale = math.min(vw / contentWidth, vh / contentHeight).clamp(_minScale, _maxScale);
+    final tx = (vw - contentWidth * scale) / 2;
+    final ty = (vh - contentHeight * scale) / 2;
+    _tc.value = Matrix4.identity()
+      ..scale(scale)
+      ..translate(tx / scale, ty / scale);
+  }
+}
+
+class _ZoomControls extends StatelessWidget {
+  const _ZoomControls({required this.onIn, required this.onOut, required this.onFit});
+  final VoidCallback onIn;
+  final VoidCallback onOut;
+  final VoidCallback onFit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(6.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(tooltip: '拡大', icon: const Icon(Icons.add), onPressed: onIn),
+            IconButton(tooltip: '縮小', icon: const Icon(Icons.remove), onPressed: onOut),
+            IconButton(tooltip: 'フィット', icon: const Icon(Icons.fit_screen), onPressed: onFit),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Node {
+  _Node({required this.id, required this.title, required this.level, this.parentId, required this.type});
+  final int id;
+  final String title;
+  final int level; // 0 dream, 1 long, 2 short
+  final int? parentId;
+  final String type; // 'dream' | 'long' | 'short'
+
+  static _Node level0(Dream d) => _Node(id: d.id, title: d.title, level: 0, type: 'dream');
+  static _Node level1(LongTerm l, {required int parentId}) => _Node(id: l.id, title: l.title, level: 1, parentId: parentId, type: 'long');
+  static _Node level2(ShortTerm s, {required int parentId}) => _Node(id: s.id, title: s.title, level: 2, parentId: parentId, type: 'short');
+
+  bool get isEmpty => id == -1;
+  static _Node empty() => _Node(id: -1, title: '', level: -1, type: '');
+}
+
+class _EdgesPainter extends CustomPainter {
+  _EdgesPainter({required this.nodes, required this.positions, required this.nodeSize, required this.edges});
+  final List<_Node> nodes;
+  final Map<String, Offset> positions;
+  final Size nodeSize;
+  final List<(_Node, _Node)> edges;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    for (final (p, c) in edges) {
+      final pPos = positions['${p.type}:${p.id}'] ?? Offset.zero;
+      final cPos = positions['${c.type}:${c.id}'] ?? Offset.zero;
+      final pCenter = Offset(pPos.dx + nodeSize.width / 2, pPos.dy + nodeSize.height);
+      final cCenter = Offset(cPos.dx + nodeSize.width / 2, cPos.dy);
+
+      final midY = (pCenter.dy + cCenter.dy) / 2;
+      final path = Path()
+        ..moveTo(pCenter.dx, pCenter.dy)
+        ..cubicTo(pCenter.dx, midY, cCenter.dx, midY, cCenter.dx, cCenter.dy);
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _EdgesPainter oldDelegate) {
+    return oldDelegate.positions != positions || oldDelegate.nodes != nodes || oldDelegate.edges != edges;
+  }
+}
+
+class _NodeCard extends ConsumerWidget {
+  const _NodeCard({required this.node});
+  final _Node node;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final border = switch (node.level) {
+      0 => BorderSide(color: Colors.indigo.shade400, width: 2),
+      1 => BorderSide(color: Colors.teal.shade400, width: 2),
+      _ => BorderSide(color: Colors.orange.shade400, width: 2),
+    };
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        side: border,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: InkWell(
+        onTap: () async {
+          if (node.type == 'long') {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => GoalTodoPage(goalId: node.id, goalTitle: node.title),
+              ),
+            );
+          } else if (node.type == 'short') {
+            await showModalBottomSheet(
+              context: context,
+              useSafeArea: true,
+              isScrollControlled: true,
+              builder: (context) => ShortTermDetailSheet(shortTerm: ShortTerm(title: node.title)..id = node.id),
+            );
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: node.level == 1
+                    ? _GoalNodeContent(node: node)
+                    : Text(
+                        node.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (v) async {
+                  switch (v) {
+                    case 'add_child':
+                      // In Maps, allow creating only LongTerm under Dream, with full form
+                      if (node.level == 0) {
+                        final allTags = ref.read(tagsProvider).value ??
+                            await ref.read(tagRepoProvider).watchAll().first;
+                        final created = await showDialog<_LongTermCreateResult>(
+                          context: context,
+                          builder: (_) => _CreateLongTermDialog(allTags: allTags),
+                        );
+                        if (created != null) {
+                          final repo = ref.read(longTermRepoProvider);
+                          final item = LongTerm(
+                            title: created.title,
+                            dreamId: node.id,
+                            priority: created.priority,
+                            dueAt: created.dueAt,
+                          );
+                          await repo.put(item);
+                          if (created.tags.isNotEmpty) {
+                            await repo.setTags(item, created.tags);
+                          }
+                        }
+                      }
+                      break;
+                    case 'edit':
+                      if (node.level == 0) {
+                        final repo = ref.read(dreamRepoProvider);
+                        final ent = await repo.getById(node.id);
+                        if (ent == null) break;
+                        final updated = await showDialog<Dream>(
+                          context: context,
+                          builder: (_) => _EditDreamDialog(initial: ent),
+                        );
+                        if (updated != null) {
+                          await repo.put(updated);
+                        }
+                      } else if (node.level == 1) {
+                        final repo = ref.read(longTermRepoProvider);
+                        final ent = await repo.getById(node.id);
+                        if (ent == null) break;
+                        final allTags = ref.read(tagsProvider).value ??
+                            await ref.read(tagRepoProvider).watchAll().first;
+                        await ent.tags.load();
+                        final updated = await showDialog<_LongTermEditResult>(
+                          context: context,
+                          builder: (_) => _EditLongTermDialog(initial: ent, allTags: allTags, initialTags: ent.tags.toList()),
+                        );
+                        if (updated != null) {
+                          // Persist fields + tags in one go via setTags
+                          await repo.setTags(updated.item, updated.tags);
+                        }
+                      }
+                      break;
+                    case 'open_tasks':
+                      if (node.type == 'short') {
+                        await showModalBottomSheet(
+                          context: context,
+                          useSafeArea: true,
+                          isScrollControlled: true,
+                          builder: (context) => ShortTermDetailSheet(shortTerm: ShortTerm(title: node.title)..id = node.id),
+                        );
+                      }
+                      break;
+                    case 'edit_tags':
+                      if (node.level == 1) {
+                        final repo = ref.read(longTermRepoProvider);
+                        final item = await repo.getById(node.id);
+                        if (item == null) break;
+                        await item.tags.load();
+                        final allTags = await ref.read(tagRepoProvider).watchAll().first;
+                        final picked = await showDialog<List<Tag>>(
+                          context: context,
+                          builder: (context) => _TagPickerDialog(
+                            allTags: allTags,
+                            initial: item.tags.toList(),
+                          ),
+                        );
+                        if (picked != null) {
+                          await repo.setTags(item, picked);
+                        }
+                      } else if (node.level == 2) {
+                        final repo = ref.read(shortTermRepoProvider);
+                        final item = await repo.getById(node.id);
+                        if (item == null) break;
+                        await item.tags.load();
+                        final allTags = await ref.read(tagRepoProvider).watchAll().first;
+                        final picked = await showDialog<List<Tag>>(
+                          context: context,
+                          builder: (context) => _TagPickerDialog(
+                            allTags: allTags,
+                            initial: item.tags.toList(),
+                          ),
+                        );
+                        if (picked != null) {
+                          await repo.setTags(item, picked);
+                        }
+                      }
+                      break;
+                  }
+                },
+                itemBuilder: (context) {
+                  final items = <PopupMenuEntry<String>>[];
+                  // Remove ShortTerm creation path from Maps: only allow child for Dream
+                  if (node.level == 0) {
+                    items.add(const PopupMenuItem(value: 'add_child', child: Text('子を追加')));
+                  }
+                  if (node.level == 0 || node.level == 1) {
+                    items.add(const PopupMenuItem(value: 'edit', child: Text('編集')));
+                  }
+                  if (node.type == 'short') {
+                    items.add(const PopupMenuItem(value: 'open_tasks', child: Text('タスクを管理')));
+                  }
+                  return items;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TagPickerDialog extends StatefulWidget {
+  const _TagPickerDialog({required this.allTags, required this.initial});
+  final List<Tag> allTags;
+  final List<Tag> initial;
+
+  @override
+  State<_TagPickerDialog> createState() => _TagPickerDialogState();
+}
+
+class _EditDreamDialog extends StatefulWidget {
+  const _EditDreamDialog({required this.initial});
+  final Dream initial;
+
+  @override
+  State<_EditDreamDialog> createState() => _EditDreamDialogState();
+}
+
+class _EditDreamDialogState extends State<_EditDreamDialog> {
+  late TextEditingController _title;
+  // Priority/Due are no longer editable for Dream; keep existing values.
+  late int _priority;
+  DateTime? _dueAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(text: widget.initial.title);
+    _priority = widget.initial.priority;
+    _dueAt = widget.initial.dueAt;
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Future<void> pickDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+        initialDate: _dueAt ?? DateTime.now(),
+      );
+      if (picked != null) setState(() => _dueAt = picked);
+    }
+
+    return AlertDialog(
+      title: const Text('夢を編集'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              // 夢には優先度・期限は不要のため、編集項目から除外
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        FilledButton(
+          onPressed: () {
+            final d = Dream(
+              id: widget.initial.id,
+              title: _title.text.trim().isEmpty ? widget.initial.title : _title.text.trim(),
+              // Keep existing values for non-editable fields
+              priority: widget.initial.priority,
+              dueAt: widget.initial.dueAt,
+              color: widget.initial.color,
+              archived: widget.initial.archived,
+            )
+              ..createdAt = widget.initial.createdAt
+              ..updatedAt = DateTime.now();
+            Navigator.pop(context, d);
+          },
+          child: const Text('保存'),
+        )
+      ],
+    );
+  }
+}
+
+class _EditLongTermDialog extends StatefulWidget {
+  const _EditLongTermDialog({required this.initial, required this.allTags, required this.initialTags});
+  final LongTerm initial;
+  final List<Tag> allTags;
+  final List<Tag> initialTags;
+
+  @override
+  State<_EditLongTermDialog> createState() => _EditLongTermDialogState();
+}
+
+class _EditLongTermDialogState extends State<_EditLongTermDialog> {
+  late TextEditingController _title;
+  late int _priority;
+  DateTime? _dueAt;
+  late Set<int> _selectedTagIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(text: widget.initial.title);
+    _priority = widget.initial.priority;
+    _dueAt = widget.initial.dueAt;
+    _selectedTagIds = widget.initialTags.map((t) => t.id).toSet();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Future<void> pickDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+        initialDate: _dueAt ?? DateTime.now(),
+      );
+      if (picked != null) setState(() => _dueAt = picked);
+    }
+
+    return AlertDialog(
+      title: const Text('目標を編集'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              const SizedBox(height: 12),
+              const Text('タグ'),
+              const SizedBox(height: 8),
+              if (widget.allTags.isEmpty)
+                const Text('タグがありません。右上の「タグ管理」から作成してください。')
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: -8,
+                  children: widget.allTags
+                      .map((t) => FilterChip(
+                            selected: _selectedTagIds.contains(t.id),
+                            onSelected: (v) {
+                              setState(() {
+                                if (v) {
+                                  _selectedTagIds.add(t.id);
+                                } else {
+                                  _selectedTagIds.remove(t.id);
+                                }
+                              });
+                            },
+                            label: Text(t.name),
+                          ))
+                      .toList(),
+                ),
+              const SizedBox(height: 12),
+              const Text('期限'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(label: const Text('なし'), selected: _dueAt == null, onSelected: (_) => setState(() => _dueAt = null)),
+                  ChoiceChip(label: const Text('今日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now())),
+                  ChoiceChip(label: const Text('明日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now().add(const Duration(days: 1)))),
+                  ActionChip(label: const Text('日付指定'), onPressed: pickDate),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('優先度'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(label: const Text('低'), selected: _priority == 0, onSelected: (_) => setState(() => _priority = 0)),
+                  ChoiceChip(label: const Text('中'), selected: _priority == 1, onSelected: (_) => setState(() => _priority = 1)),
+                  ChoiceChip(label: const Text('高'), selected: _priority == 2, onSelected: (_) => setState(() => _priority = 2)),
+                  ChoiceChip(label: const Text('最優先'), selected: _priority == 3, onSelected: (_) => setState(() => _priority = 3)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        FilledButton(
+          onPressed: () {
+            final updated = LongTerm(
+              id: widget.initial.id,
+              title: _title.text.trim().isEmpty ? widget.initial.title : _title.text.trim(),
+              dreamId: widget.initial.dreamId,
+              priority: _priority,
+              dueAt: _dueAt,
+              archived: widget.initial.archived,
+            )
+              ..createdAt = widget.initial.createdAt
+              ..updatedAt = DateTime.now();
+            final selectedTags = widget.allTags.where((t) => _selectedTagIds.contains(t.id)).toList();
+            Navigator.pop(context, _LongTermEditResult(item: updated, tags: selectedTags));
+          },
+          child: const Text('保存'),
+        )
+      ],
+    );
+  }
+}
+
+class _CreateLongTermDialog extends StatefulWidget {
+  const _CreateLongTermDialog({required this.allTags});
+  final List<Tag> allTags;
+
+  @override
+  State<_CreateLongTermDialog> createState() => _CreateLongTermDialogState();
+}
+
+class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
+  final TextEditingController _title = TextEditingController();
+  final Set<int> _selectedTagIds = {};
+  int _priority = 1;
+  DateTime? _dueAt;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Future<void> pickDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+        initialDate: _dueAt ?? DateTime.now(),
+      );
+      if (picked != null) setState(() => _dueAt = picked);
+    }
+
+    return AlertDialog(
+      title: const Text('目標を作成'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              const SizedBox(height: 12),
+              const Text('タグ'),
+              const SizedBox(height: 8),
+              if (widget.allTags.isEmpty)
+                const Text('タグがありません。右上の「タグ管理」から作成してください。')
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: -8,
+                  children: widget.allTags
+                      .map((t) => FilterChip(
+                            selected: _selectedTagIds.contains(t.id),
+                            onSelected: (v) {
+                              setState(() {
+                                if (v) {
+                                  _selectedTagIds.add(t.id);
+                                } else {
+                                  _selectedTagIds.remove(t.id);
+                                }
+                              });
+                            },
+                            label: Text(t.name),
+                          ))
+                      .toList(),
+                ),
+              const SizedBox(height: 12),
+              const Text('期限'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(label: const Text('なし'), selected: _dueAt == null, onSelected: (_) => setState(() => _dueAt = null)),
+                  ChoiceChip(label: const Text('今日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now())),
+                  ChoiceChip(label: const Text('明日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now().add(const Duration(days: 1)))),
+                  ActionChip(label: const Text('日付指定'), onPressed: pickDate),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('優先度'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(label: const Text('低'), selected: _priority == 0, onSelected: (_) => setState(() => _priority = 0)),
+                  ChoiceChip(label: const Text('中'), selected: _priority == 1, onSelected: (_) => setState(() => _priority = 1)),
+                  ChoiceChip(label: const Text('高'), selected: _priority == 2, onSelected: (_) => setState(() => _priority = 2)),
+                  ChoiceChip(label: const Text('最優先'), selected: _priority == 3, onSelected: (_) => setState(() => _priority = 3)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        FilledButton(
+          onPressed: () {
+            final t = _title.text.trim();
+            if (t.isEmpty) {
+              Navigator.pop(context);
+              return;
+            }
+            final tags = widget.allTags.where((e) => _selectedTagIds.contains(e.id)).toList();
+            Navigator.pop(context, _LongTermCreateResult(title: t, tags: tags, priority: _priority, dueAt: _dueAt));
+          },
+          child: const Text('作成'),
+        ),
+      ],
+    );
+  }
+}
+
+
+class _LongTermEditResult {
+  _LongTermEditResult({required this.item, required this.tags});
+  final LongTerm item;
+  final List<Tag> tags;
+}
+
+class _LongTermCreateResult {
+  _LongTermCreateResult({required this.title, required this.tags, required this.priority, required this.dueAt});
+  final String title;
+  final List<Tag> tags;
+  final int priority;
+  final DateTime? dueAt;
+}
+
+
+class _TagPickerDialogState extends State<_TagPickerDialog> {
+  late Set<int> _selectedIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIds = widget.initial.map((t) => t.id).toSet();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('タグを選択'),
+      content: SizedBox(
+        width: 360,
+        height: 360,
+        child: widget.allTags.isEmpty
+            ? const Center(child: Text('タグがありません。右上の「タグ管理」から作成してください。'))
+            : ListView(
+                children: widget.allTags
+                    .map((t) => CheckboxListTile(
+                          value: _selectedIds.contains(t.id),
+                          onChanged: (v) {
+                            setState(() {
+                              if (v == true) {
+                                _selectedIds.add(t.id);
+                              } else {
+                                _selectedIds.remove(t.id);
+                              }
+                            });
+                          },
+                          title: Text(t.name),
+                          secondary: CircleAvatar(backgroundColor: Color(t.color)),
+                        ))
+                    .toList(),
+              ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        FilledButton(
+          onPressed: () {
+            final result = widget.allTags.where((t) => _selectedIds.contains(t.id)).toList();
+            Navigator.pop(context, result);
+          },
+          child: const Text('保存'),
+        )
+      ],
+    );
+  }
+}
+
+class _GoalNodeContent extends ConsumerWidget {
+  const _GoalNodeContent({required this.node});
+  final _Node node;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final data = ref.watch(gp.longTermWithTagsProvider(node.id)).value;
+    final tags = data?.tags ?? const <Tag>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          node.title,
+          maxLines: 4,
+          softWrap: true,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        if (tags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: -6,
+              children: tags
+                  .map((t) => Chip(
+                        label: Text('#${t.name}', style: Theme.of(context).textTheme.bodySmall),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        backgroundColor: Color(t.color).withOpacity(0.15),
+                        side: BorderSide(color: Color(t.color).withOpacity(0.35)),
+                      ))
+                  .toList(),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+Future<String?> _askTitle(BuildContext context, String title) async {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: 'タイトル'),
+        onSubmitted: (_) => Navigator.of(context).pop(controller.text.trim()),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('追加')),
+      ],
+    ),
+  );
+}
