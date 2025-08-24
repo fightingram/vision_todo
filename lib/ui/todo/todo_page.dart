@@ -54,8 +54,14 @@ class _TodoTreeState extends ConsumerState<_TodoTree> with TickerProviderStateMi
     final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
     final tags = ref.watch(tagsProvider).value ?? const <Tag>[];
 
-    final dreamTabs = [const Tab(text: 'すべて'), ...dreams.map((d) => Tab(text: d.title))];
-    final tagTabs = [const Tab(text: 'すべて'), ...tags.map((t) => Tab(text: t.name))];
+    final dreamTabs = [
+      const Tab(icon: Icon(Icons.bedtime_outlined), text: '夢: すべて'),
+      ...dreams.map((d) => Tab(icon: const Icon(Icons.bedtime_outlined), text: d.title)),
+    ];
+    final tagTabs = [
+      const Tab(icon: Icon(Icons.label_outline), text: 'タグ: すべて'),
+      ...tags.map((t) => Tab(icon: const Icon(Icons.label_outline), text: t.name)),
+    ];
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -182,19 +188,39 @@ class _LongFilteredSection extends ConsumerWidget {
             leading: const Icon(Icons.flag_outlined),
             title: Text(item.title),
             subtitle: Text('TODO ${filteredTasks.length} 件'),
-            children: filteredTasks.isEmpty
-                ? [
-                    const Padding(
-                      padding: EdgeInsets.all(12.0),
-                      child: Text('該当のTODOはありません'),
-                    )
-                  ]
-                : filteredTasks
+            children: [
+              // Goal actions row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                child: Row(
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.emoji_events_outlined),
+                      label: Text(item.archived ? '達成済み' : '達成'),
+                      onPressed: item.archived
+                          ? null
+                          : () async {
+                              final repo = ref.read(longTermRepoProvider);
+                              item.archived = true;
+                              await repo.put(item);
+                            },
+                    ),
+                  ],
+                ),
+              ),
+              if (filteredTasks.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: Text('該当のTODOはありません'),
+                )
+              else
+                ...filteredTasks
                     .map<Widget>((t) => Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: TaskTile(task: t),
                         ))
                     .toList(),
+            ],
           ),
         );
       },

@@ -72,58 +72,122 @@ class TaskTile extends ConsumerWidget {
       ),
       trailing: PopupMenuButton<String>(
         onSelected: (v) async {
-          switch (v) {
-            case 'p0':
-            case 'p1':
-            case 'p2':
-            case 'p3':
-              task.priority = int.parse(v.substring(1));
-              break;
-            case 'today':
-              task.dueAt = DateTime.now();
-              break;
-            case 'tomorrow':
-              task.dueAt = DateTime.now().add(const Duration(days: 1));
-              break;
-            case 'week':
-              final now = DateTime.now();
-              final weekday = now.weekday;
-              final toAdd = 7 - weekday; // end of week (Sun)
-              task.dueAt = DateTime(now.year, now.month, now.day).add(Duration(days: toAdd));
-              break;
-            case 'date':
-              final picked = await showDatePicker(
-                context: context,
-                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                initialDate: task.dueAt ?? DateTime.now(),
-              );
-              if (picked != null) task.dueAt = picked;
-              break;
-            case 'none':
-              task.dueAt = null;
-              break;
-            case 'delete':
-              await repo.delete(task.id);
-              return;
+          if (v == 'edit') {
+            final updated = await showDialog<Task>(
+              context: context,
+              builder: (_) => _EditTaskDialog(initial: task),
+            );
+            if (updated != null) {
+              await repo.update(updated);
+            }
           }
-          await repo.update(task);
         },
-        itemBuilder: (context) => [
-          const PopupMenuItem(value: 'p3', child: Text('優先度: 最優先')),
-          const PopupMenuItem(value: 'p2', child: Text('優先度: 高')),
-          const PopupMenuItem(value: 'p1', child: Text('優先度: 中')),
-          const PopupMenuItem(value: 'p0', child: Text('優先度: 低')),
-          const PopupMenuDivider(),
-          const PopupMenuItem(value: 'today', child: Text('期限: 今日')),
-          const PopupMenuItem(value: 'tomorrow', child: Text('期限: 明日')),
-          const PopupMenuItem(value: 'week', child: Text('期限: 今週')),
-          const PopupMenuItem(value: 'date', child: Text('期限: 日付指定')),
-          const PopupMenuItem(value: 'none', child: Text('期限: なし')),
-          const PopupMenuDivider(),
-          const PopupMenuItem(value: 'delete', child: Text('削除')),
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: 'edit', child: Text('編集')),
         ],
       ),
+    );
+  }
+}
+
+class _EditTaskDialog extends StatefulWidget {
+  const _EditTaskDialog({required this.initial});
+  final Task initial;
+
+  @override
+  State<_EditTaskDialog> createState() => _EditTaskDialogState();
+}
+
+class _EditTaskDialogState extends State<_EditTaskDialog> {
+  late TextEditingController _title;
+  late int _priority;
+  DateTime? _dueAt;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(text: widget.initial.title);
+    _priority = widget.initial.priority;
+    _dueAt = widget.initial.dueAt;
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Future<void> pickDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+        initialDate: _dueAt ?? DateTime.now(),
+      );
+      if (picked != null) setState(() => _dueAt = picked);
+    }
+
+    return AlertDialog(
+      title: const Text('TODOを編集'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              const SizedBox(height: 12),
+              const Text('期限'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(label: const Text('なし'), selected: _dueAt == null, onSelected: (_) => setState(() => _dueAt = null)),
+                  ChoiceChip(label: const Text('今日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now())),
+                  ChoiceChip(label: const Text('明日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now().add(const Duration(days: 1)))),
+                  ActionChip(label: const Text('日付指定'), onPressed: pickDate),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('優先度'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(label: const Text('低'), selected: _priority == 0, onSelected: (_) => setState(() => _priority = 0)),
+                  ChoiceChip(label: const Text('中'), selected: _priority == 1, onSelected: (_) => setState(() => _priority = 1)),
+                  ChoiceChip(label: const Text('高'), selected: _priority == 2, onSelected: (_) => setState(() => _priority = 2)),
+                  ChoiceChip(label: const Text('最優先'), selected: _priority == 3, onSelected: (_) => setState(() => _priority = 3)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        FilledButton(
+          onPressed: () {
+            final updated = Task(
+              id: widget.initial.id,
+              title: _title.text.trim().isEmpty ? widget.initial.title : _title.text.trim(),
+              priority: _priority,
+              dueAt: _dueAt,
+              shortTermId: widget.initial.shortTermId,
+              archived: widget.initial.archived,
+              status: widget.initial.status,
+              doneAt: widget.initial.doneAt,
+            )
+              ..createdAt = widget.initial.createdAt
+              ..updatedAt = DateTime.now();
+            Navigator.pop(context, updated);
+          },
+          child: const Text('保存'),
+        )
+      ],
     );
   }
 }
