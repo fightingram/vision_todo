@@ -5,7 +5,7 @@ import '../../providers/db_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
 import '../widgets/character_band.dart';
-import '../widgets/quick_add_bar.dart';
+import '../widgets/new_item_dialog.dart';
 import '../widgets/task_tile.dart';
 
 class HomePage extends ConsumerWidget {
@@ -17,7 +17,7 @@ class HomePage extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: const Text('ホーム'),
         actions: [
           IconButton(
             tooltip: settings.showCompleted ? '未完了のみ' : '完了も表示',
@@ -25,6 +25,16 @@ class HomePage extends ConsumerWidget {
             icon: Icon(settings.showCompleted ? Icons.checklist : Icons.checklist_rtl),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: '新規作成',
+        onPressed: () async {
+          await showDialog(
+            context: context,
+            builder: (_) => const NewItemDialog(),
+          );
+        },
+        child: const Icon(Icons.add),
       ),
       body: init.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -44,8 +54,6 @@ class HomePage extends ConsumerWidget {
                       _Section(title: '明日', tasks: sectioned.tomorrow),
                       _Section(title: '今週', tasks: sectioned.thisWeek),
                       _Section(title: '期限なし', tasks: sectioned.none),
-                      const SizedBox(height: 12),
-                      const QuickAddBar(),
                     ],
                   ),
                 ),

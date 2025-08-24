@@ -68,7 +68,7 @@ class TaskRepository {
         .asBroadcastStream();
   }
 
-  // Unified naming: watch tasks by Goal (maps to ShortTerm under the hood)
+  // Unified naming: watch tasks by Term (maps to ShortTerm under the hood)
   Stream<List<Task>> watchByGoal(int goalId) {
     return watchByShortTerm(goalId);
   }

@@ -4,17 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/dream.dart';
+// Unified: stop importing LongTerm/ShortTerm directly for rendering
+import '../../models/task.dart';
 import '../../models/long_term.dart';
-import '../../models/short_term.dart';
 import '../../providers/db_provider.dart';
-import '../../providers/goal_providers.dart';
+import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
-import '../goals/goals_page.dart' show ShortTermDetailSheet; // reuse sheet
-import '../todo/goal_todo_page.dart';
-import '../goals/tags_page.dart';
+import '../terms/terms_page.dart' show TermDetailSheet; // reuse sheet
+import '../todo/term_todo_page.dart';
+import '../terms/tags_page.dart';
 import '../../models/tag.dart';
-import '../../repositories/goal_repositories.dart';
-import '../../providers/goal_providers.dart' as gp;
+import '../../repositories/term_repositories.dart';
+import '../../providers/term_providers.dart' as gp;
 
 class MapsPage extends ConsumerWidget {
   const MapsPage({super.key});
@@ -78,19 +79,25 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
   @override
   Widget build(BuildContext context) {
     final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
-    final longs = ref.watch(allLongTermsProvider).value ?? const <LongTerm>[];
-    final shorts = ref.watch(allShortTermsProvider).value ?? const <ShortTerm>[];
+    final topGoals = ref.watch(allTopTermsProvider).value ?? const <Term>[];
+    final childGoals = ref.watch(allChildTermsProvider).value ?? const <Term>[];
+    final tasks = ref.watch(tasksStreamProvider).value ?? const <Task>[];
 
     // Build hierarchy
     final nodes = <_Node>[];
     for (final d in dreams) {
       nodes.add(_Node.level0(d));
-      final childrenL = longs.where((l) => l.dreamId == d.id).toList();
-      for (final l in childrenL) {
-        nodes.add(_Node.level1(l, parentId: d.id));
-        final childrenS = shorts.where((s) => s.longTermId == l.id).toList();
-        for (final s in childrenS) {
-          nodes.add(_Node.level2(s, parentId: l.id));
+      final parents = topGoals.where((g) => g.dreamId == d.id).toList();
+      for (final p in parents) {
+        nodes.add(_Node.level1Term(p, parentId: d.id));
+        final children = childGoals.where((c) => c.parentId == p.id).toList();
+        for (final c in children) {
+          nodes.add(_Node.level2Term(c, parentId: p.id));
+        }
+        // Append tasks under each parent goal as level 3 nodes
+        final childrenT = tasks.where((t) => t.shortTermId == p.id).toList();
+        for (final t in childrenT) {
+          nodes.add(_Node.level3(t, parentId: p.id));
         }
       }
     }
@@ -100,6 +107,8 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     const nodeH = 150.0;
     const hGap = 60.0;
     const vGap = 140.0;
+    const taskH = 80.0; // compact height for task cards
+    const taskHGap = 12.0; // horizontal gap between task cards
     const pad = 60.0;
 
     // Determine positions
@@ -109,7 +118,7 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     double minX = double.infinity, minY = double.infinity;
     double maxX = -double.infinity, maxY = -double.infinity;
     // Pre-calc canvas height from rows
-    double totalHeight = pad * 2 + nodeH * 3 + vGap * 2;
+    double totalHeight = pad * 2 + nodeH * 3 + vGap * 2 + taskH + vGap; // leave space for tasks row
 
     for (var i = 0; i < dreamIds.length; i++) {
       final dx = pad + i * (nodeW + 240);
@@ -118,30 +127,74 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
       minY = math.min(minY, pad);
       maxX = math.max(maxX, dx + nodeW);
       maxY = math.max(maxY, pad + nodeH);
-      final lp = longs.where((l) => l.dreamId == dreamIds[i]).toList();
+      final lp = topGoals.where((g) => g.dreamId == dreamIds[i]).toList();
       if (lp.isEmpty) continue;
       final baseX = dx - ((lp.length - 1) / 2) * (nodeW + hGap);
       for (var j = 0; j < lp.length; j++) {
         final lx = baseX + j * (nodeW + hGap);
         final ly = pad + nodeH + vGap;
-        positions['long:${lp[j].id}'] = Offset(lx, ly);
+        positions['term:${lp[j].id}'] = Offset(lx, ly);
         minX = math.min(minX, lx);
         minY = math.min(minY, ly);
         maxX = math.max(maxX, lx + nodeW);
         maxY = math.max(maxY, ly + nodeH);
-        final sp = shorts.where((s) => s.longTermId == lp[j].id).toList();
+        final sp = childGoals.where((s) => s.parentId == lp[j].id).toList();
         if (sp.isEmpty) continue;
         final sBaseX = lx - ((sp.length - 1) / 2) * (nodeW + hGap / 2);
         for (var k = 0; k < sp.length; k++) {
           final sx = sBaseX + k * (nodeW + hGap / 2);
           final sy = pad + (nodeH + vGap) * 2;
-          positions['short:${sp[k].id}'] = Offset(sx, sy);
+          positions['term:${sp[k].id}'] = Offset(sx, sy);
           minX = math.min(minX, sx);
           minY = math.min(minY, sy);
           maxX = math.max(maxX, sx + nodeW);
           maxY = math.max(maxY, sy + nodeH);
         }
       }
+    }
+
+    // Append tasks as a separate row under all shorts.
+    // First, build clusters per LongTerm and lay them out left-to-right without overlap.
+    final longPositions = <int, Offset>{
+      for (final e in positions.entries)
+        if (e.key.startsWith('term:')) int.parse(e.key.split(':')[1]): e.value
+    };
+    // Collect clusters (centered at long center)
+    final clusters = <_TaskCluster>[];
+    for (final g in topGoals) {
+      final lp = longPositions[g.id];
+      if (lp == null) continue;
+      final ts = tasks.where((t) => t.shortTermId == g.id).toList();
+      if (ts.isEmpty) continue;
+      clusters.add(_TaskCluster(
+        longId: g.id,
+        centerX: lp.dx + nodeW / 2,
+        tasks: ts,
+      ));
+    }
+
+    // Sort clusters by centerX
+    clusters.sort((a, b) => a.centerX.compareTo(b.centerX));
+    double lastRight = -double.infinity;
+    const minClusterGap = 24.0; // minimum gap between clusters
+    final taskRowY = pad + (nodeH + vGap) * 2 + nodeH + vGap; // below shorts with extra gap
+    for (final c in clusters) {
+      final width = c.tasks.length * (nodeW + taskHGap) - taskHGap;
+      double left = c.centerX - width / 2;
+      if (left < lastRight + minClusterGap) {
+        left = lastRight + minClusterGap;
+      }
+      // Place each task in the cluster
+      for (var i = 0; i < c.tasks.length; i++) {
+        final tx = left + i * (nodeW + taskHGap);
+        final key = 'task:${c.tasks[i].id}';
+        positions[key] = Offset(tx, taskRowY);
+        minX = math.min(minX, tx);
+        minY = math.min(minY, taskRowY);
+        maxX = math.max(maxX, tx + nodeW);
+        maxY = math.max(maxY, taskRowY + taskH);
+      }
+      lastRight = left + width;
     }
 
     // Handle empty case
@@ -169,6 +222,9 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
         final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 0, orElse: () => _Node.empty());
         if (!p.isEmpty) edges.add((p, n));
       } else if (n.level == 2) {
+        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1, orElse: () => _Node.empty());
+        if (!p.isEmpty) edges.add((p, n));
+      } else if (n.level == 3) {
         final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1, orElse: () => _Node.empty());
         if (!p.isEmpty) edges.add((p, n));
       }
@@ -221,7 +277,7 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
                     left: pos.dx,
                     top: pos.dy,
                     width: nodeW,
-                    height: nodeH,
+                    height: n.level == 3 ? taskH : nodeH,
                     child: _NodeCard(node: n),
                   );
                 }),
@@ -285,16 +341,29 @@ class _ZoomControls extends StatelessWidget {
 }
 
 class _Node {
-  _Node({required this.id, required this.title, required this.level, this.parentId, required this.type});
+  _Node({required this.id, required this.title, required this.level, this.parentId, required this.type, this.priority, this.done, this.dueAt});
   final int id;
   final String title;
   final int level; // 0 dream, 1 long, 2 short
   final int? parentId;
-  final String type; // 'dream' | 'long' | 'short'
+  final String type; // 'dream' | 'long' | 'short' | 'task'
+  final int? priority; // for task
+  final bool? done; // for task
+  final DateTime? dueAt; // for task
 
   static _Node level0(Dream d) => _Node(id: d.id, title: d.title, level: 0, type: 'dream');
-  static _Node level1(LongTerm l, {required int parentId}) => _Node(id: l.id, title: l.title, level: 1, parentId: parentId, type: 'long');
-  static _Node level2(ShortTerm s, {required int parentId}) => _Node(id: s.id, title: s.title, level: 2, parentId: parentId, type: 'short');
+  static _Node level1Term(Term g, {required int parentId}) => _Node(id: g.id, title: g.title, level: 1, parentId: parentId, type: 'term');
+  static _Node level2Term(Term g, {required int parentId}) => _Node(id: g.id, title: g.title, level: 2, parentId: parentId, type: 'term');
+  static _Node level3(Task t, {required int parentId}) => _Node(
+        id: t.id,
+        title: t.title,
+        level: 3,
+        parentId: parentId,
+        type: 'task',
+        priority: t.priority,
+        done: t.status == TaskStatus.done,
+        dueAt: t.dueAt,
+      );
 
   bool get isEmpty => id == -1;
   static _Node empty() => _Node(id: -1, title: '', level: -1, type: '');
@@ -343,7 +412,8 @@ class _NodeCard extends ConsumerWidget {
     final border = switch (node.level) {
       0 => BorderSide(color: Colors.indigo.shade400, width: 2),
       1 => BorderSide(color: Colors.teal.shade400, width: 2),
-      _ => BorderSide(color: Colors.orange.shade400, width: 2),
+      2 => BorderSide(color: Colors.orange.shade400, width: 2),
+      _ => BorderSide(color: Colors.blueGrey.shade300, width: 1.5),
     };
     return Card(
       elevation: 2,
@@ -353,19 +423,21 @@ class _NodeCard extends ConsumerWidget {
       ),
       child: InkWell(
         onTap: () async {
-          if (node.type == 'long') {
+          if (node.level == 1) {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => GoalTodoPage(goalId: node.id, goalTitle: node.title),
+                builder: (_) => TermTodoPage(goalId: node.id, goalTitle: node.title),
               ),
             );
-          } else if (node.type == 'short') {
+          } else if (node.level == 2) {
             await showModalBottomSheet(
               context: context,
               useSafeArea: true,
               isScrollControlled: true,
-              builder: (context) => ShortTermDetailSheet(shortTerm: ShortTerm(title: node.title)..id = node.id),
+              builder: (context) => TermDetailSheet(goalId: node.id, title: node.title),
             );
+          } else if (node.type == 'task') {
+            // Display-only for now
           }
         },
         child: Padding(
@@ -373,20 +445,23 @@ class _NodeCard extends ConsumerWidget {
           child: Row(
             children: [
               Expanded(
-                child: node.level == 1
-                    ? _GoalNodeContent(node: node)
-                    : Text(
-                        node.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
+                child: switch (node.level) {
+                  1 => _GoalNodeContent(node: node),
+                  3 => _TaskNodeContent(node: node),
+                  _ => Text(
+                      node.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                },
               ),
-              PopupMenuButton<String>(
+              if (node.level != 3)
+                PopupMenuButton<String>(
                 onSelected: (v) async {
                   switch (v) {
                     case 'add_child':
-                      // In Maps, allow creating only LongTerm under Dream, with full form
+                      // Create a top-level goal under Dream with a full form
                       if (node.level == 0) {
                         final allTags = ref.read(tagsProvider).value ??
                             await ref.read(tagRepoProvider).watchAll().first;
@@ -395,16 +470,14 @@ class _NodeCard extends ConsumerWidget {
                           builder: (_) => _CreateLongTermDialog(allTags: allTags),
                         );
                         if (created != null) {
-                          final repo = ref.read(longTermRepoProvider);
-                          final item = LongTerm(
-                            title: created.title,
-                            dreamId: node.id,
-                            priority: created.priority,
-                            dueAt: created.dueAt,
-                          );
-                          await repo.put(item);
+                          final id = await ref.read(termRepoProvider).addTerm(
+                                title: created.title,
+                                dreamId: node.id,
+                                priority: created.priority,
+                                dueAt: created.dueAt,
+                              );
                           if (created.tags.isNotEmpty) {
-                            await repo.setTags(item, created.tags);
+                            await ref.read(termRepoProvider).setTagsById(id, created.tags);
                           }
                         }
                       }
@@ -444,43 +517,22 @@ class _NodeCard extends ConsumerWidget {
                           context: context,
                           useSafeArea: true,
                           isScrollControlled: true,
-                          builder: (context) => ShortTermDetailSheet(shortTerm: ShortTerm(title: node.title)..id = node.id),
+                          builder: (context) => TermDetailSheet(goalId: node.id, title: node.title),
                         );
                       }
                       break;
                     case 'edit_tags':
-                      if (node.level == 1) {
-                        final repo = ref.read(longTermRepoProvider);
-                        final item = await repo.getById(node.id);
-                        if (item == null) break;
-                        await item.tags.load();
-                        final allTags = await ref.read(tagRepoProvider).watchAll().first;
-                        final picked = await showDialog<List<Tag>>(
-                          context: context,
-                          builder: (context) => _TagPickerDialog(
-                            allTags: allTags,
-                            initial: item.tags.toList(),
-                          ),
-                        );
-                        if (picked != null) {
-                          await repo.setTags(item, picked);
-                        }
-                      } else if (node.level == 2) {
-                        final repo = ref.read(shortTermRepoProvider);
-                        final item = await repo.getById(node.id);
-                        if (item == null) break;
-                        await item.tags.load();
-                        final allTags = await ref.read(tagRepoProvider).watchAll().first;
-                        final picked = await showDialog<List<Tag>>(
-                          context: context,
-                          builder: (context) => _TagPickerDialog(
-                            allTags: allTags,
-                            initial: item.tags.toList(),
-                          ),
-                        );
-                        if (picked != null) {
-                          await repo.setTags(item, picked);
-                        }
+                      final allTags = await ref.read(tagRepoProvider).watchAll().first;
+                      final current = await ref.read(termRepoProvider).watchWithTags(node.id).first;
+                      final picked = await showDialog<List<Tag>>(
+                        context: context,
+                        builder: (context) => _TagPickerDialog(
+                          allTags: allTags,
+                          initial: current?.tags ?? const <Tag>[],
+                        ),
+                      );
+                      if (picked != null) {
+                        await ref.read(termRepoProvider).setTagsById(node.id, picked);
                       }
                       break;
                   }
@@ -494,7 +546,7 @@ class _NodeCard extends ConsumerWidget {
                   if (node.level == 0 || node.level == 1) {
                     items.add(const PopupMenuItem(value: 'edit', child: Text('編集')));
                   }
-                  if (node.type == 'short') {
+                  if (node.level == 2) {
                     items.add(const PopupMenuItem(value: 'open_tasks', child: Text('タスクを管理')));
                   }
                   return items;
@@ -506,6 +558,76 @@ class _NodeCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _TaskNodeContent extends StatelessWidget {
+  const _TaskNodeContent({required this.node});
+  final _Node node;
+
+  Color _priorityColor(int? p) {
+    switch (p) {
+      case 3:
+        return Colors.red;
+      case 2:
+        return Colors.orange;
+      case 1:
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(
+          node.done == true ? Icons.check_circle : Icons.radio_button_unchecked,
+          color: node.done == true ? Colors.green : Theme.of(context).disabledColor,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                node.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: _priorityColor(node.priority), shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  if (node.dueAt != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text('${node.dueAt!.month}/${node.dueAt!.day}', style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaskCluster {
+  _TaskCluster({required this.longId, required this.centerX, required this.tasks});
+  final int longId;
+  final double centerX;
+  final List<Task> tasks;
 }
 
 class _TagPickerDialog extends StatefulWidget {
@@ -640,7 +762,7 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
     }
 
     return AlertDialog(
-      title: const Text('目標を編集'),
+      title: const Text('Termを編集'),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -759,7 +881,7 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
     }
 
     return AlertDialog(
-      title: const Text('目標を作成'),
+      title: const Text('Termを作成'),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -913,7 +1035,7 @@ class _GoalNodeContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(gp.longTermWithTagsProvider(node.id)).value;
+    final data = ref.watch(termWithTagsProvider(node.id)).value;
     final tags = data?.tags ?? const <Tag>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

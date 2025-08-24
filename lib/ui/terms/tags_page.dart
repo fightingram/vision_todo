@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/tag.dart';
-import '../../providers/goal_providers.dart';
+import '../../providers/term_providers.dart';
 
 class TagsPage extends ConsumerWidget {
   const TagsPage({super.key});
@@ -219,4 +219,3 @@ Future<int?> _pickColor(BuildContext context, int initial) async {
     ),
   );
 }
-

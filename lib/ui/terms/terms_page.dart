@@ -2,24 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/dream.dart';
-import '../../models/long_term.dart';
-import '../../models/short_term.dart';
-import '../../providers/goal_providers.dart';
+// Unified Term entity: UI no longer references Short/Long models directly
+import '../../providers/term_providers.dart';
 import '../../models/tag.dart';
 import 'tags_page.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/task_providers.dart';
-import '../../repositories/goal_repositories.dart';
+import '../../repositories/term_repositories.dart';
 
-class GoalsPage extends ConsumerWidget {
-  const GoalsPage({super.key});
+class TermsPage extends ConsumerWidget {
+  const TermsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final init = ref.watch(isarInitProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Goals'),
+        title: const Text('Terms'),
         actions: [
           IconButton(
             tooltip: 'タグ管理',
@@ -61,7 +60,7 @@ class GoalsPage extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Expanded(
                     child: dreams.isEmpty
-                        ? const Center(child: Text('まだ目標がありません'))
+                        ? const Center(child: Text('まだTermがありません'))
                         : ListView.builder(
                             itemCount: dreams.length,
                             itemBuilder: (context, i) => DreamTile(dream: dreams[i]),
@@ -83,7 +82,7 @@ class DreamTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final longTermsAsync = ref.watch(goalsByDreamProvider(dream.id));
+    final longTermsAsync = ref.watch(termsByDreamProvider(dream.id));
     return Card(
       child: ExpansionTile(
         title: Text(dream.title),
@@ -94,9 +93,9 @@ class DreamTile extends ConsumerWidget {
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: () async {
-                final title = await _askTitle(context, '目標を追加');
+                final title = await _askTitle(context, 'Termを追加');
                 if (title != null) {
-                  await ref.read(longTermRepoProvider).put(LongTerm(title: title, dreamId: dream.id));
+                  await ref.read(termRepoProvider).addTerm(title: title, dreamId: dream.id);
                 }
               },
             ),
@@ -130,7 +129,7 @@ class DreamTile extends ConsumerWidget {
               child: Text('エラー: $e'),
             ),
             data: (items) => Column(
-              children: items.map((g) => GoalTile(item: g)).toList(),
+              children: items.map((g) => TermTile(item: g)).toList(),
             ),
           ),
         ],
@@ -139,13 +138,13 @@ class DreamTile extends ConsumerWidget {
   }
 }
 
-class GoalTile extends ConsumerWidget {
-  const GoalTile({super.key, required this.item});
-  final GoalNode item;
+class TermTile extends ConsumerWidget {
+  const TermTile({super.key, required this.item});
+  final Term item;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final shortsAsync = ref.watch(goalsByParentProvider(item.id));
+    final shortsAsync = ref.watch(termsByParentProvider(item.id));
     return Padding(
       padding: const EdgeInsets.only(left: 12.0, right: 12.0, bottom: 12.0),
       child: Card(
@@ -170,31 +169,22 @@ class GoalTile extends ConsumerWidget {
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () async {
-                  final title = await _askTitle(context, '目標を追加');
+                  final title = await _askTitle(context, 'Termを追加');
                   if (title != null) {
                     final dreamId = item.dreamId ?? (await ref.read(longTermRepoProvider).getById(item.id))?.dreamId;
                     if (dreamId == null) return;
-                    await ref.read(unifiedGoalRepoProvider).addGoal(title: title, dreamId: dreamId, parentGoalId: item.id);
+                    await ref.read(termRepoProvider).addTerm(title: title, dreamId: dreamId, parentGoalId: item.id);
                   }
                 },
               ),
               PopupMenuButton<String>(
                 onSelected: (v) async {
                   if (v == 'archive') {
-                    // archive via underlying entity
-                    final ent = await ref.read(longTermRepoProvider).getById(item.id);
-                    if (ent != null) {
-                      ent.archived = true;
-                      await ref.read(longTermRepoProvider).put(ent);
-                    }
+                    await ref.read(termRepoProvider).archiveTerm(item, archived: true);
                   } else if (v == 'unarchive') {
-                    final ent = await ref.read(longTermRepoProvider).getById(item.id);
-                    if (ent != null) {
-                      ent.archived = false;
-                      await ref.read(longTermRepoProvider).put(ent);
-                    }
+                    await ref.read(termRepoProvider).archiveTerm(item, archived: false);
                   } else if (v == 'delete') {
-                    await ref.read(unifiedGoalRepoProvider).deleteGoal(item);
+                    await ref.read(termRepoProvider).deleteTerm(item);
                   }
                 },
                 itemBuilder: (context) => [
@@ -215,7 +205,7 @@ class GoalTile extends ConsumerWidget {
                 child: Text('エラー: $e'),
               ),
               data: (items) => Column(
-                children: items.map((s) => GoalChildTile(item: s)).toList(),
+              children: items.map((s) => TermChildTile(item: s)).toList(),
               ),
             ),
           ],
@@ -225,9 +215,9 @@ class GoalTile extends ConsumerWidget {
   }
 }
 
-class GoalChildTile extends ConsumerWidget {
-  const GoalChildTile({super.key, required this.item});
-  final GoalNode item;
+class TermChildTile extends ConsumerWidget {
+  const TermChildTile({super.key, required this.item});
+  final Term item;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -252,19 +242,11 @@ class GoalChildTile extends ConsumerWidget {
           PopupMenuButton<String>(
             onSelected: (v) async {
               if (v == 'archive') {
-                final ent = await ref.read(shortTermRepoProvider).getById(item.id);
-                if (ent != null) {
-                  ent.archived = true;
-                  await ref.read(shortTermRepoProvider).put(ent);
-                }
+                await ref.read(termRepoProvider).archiveTerm(item, archived: true);
               } else if (v == 'unarchive') {
-                final ent = await ref.read(shortTermRepoProvider).getById(item.id);
-                if (ent != null) {
-                  ent.archived = false;
-                  await ref.read(shortTermRepoProvider).put(ent);
-                }
+                await ref.read(termRepoProvider).archiveTerm(item, archived: false);
               } else if (v == 'delete') {
-                await ref.read(unifiedGoalRepoProvider).deleteGoal(item);
+                await ref.read(termRepoProvider).deleteTerm(item);
               }
             },
             itemBuilder: (context) => [
@@ -278,7 +260,7 @@ class GoalChildTile extends ConsumerWidget {
         context: context,
         useSafeArea: true,
         isScrollControlled: true,
-        builder: (context) => ShortTermDetailSheet(shortTerm: ShortTerm(title: item.title)..id = item.id),
+        builder: (context) => TermDetailSheet(goalId: item.id, title: item.title),
       ),
     );
   }
@@ -286,12 +268,12 @@ class GoalChildTile extends ConsumerWidget {
 
 class _GoalTagChips extends ConsumerWidget {
   const _GoalTagChips({required this.item});
-  final GoalNode item;
+  final Term item;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return FutureBuilder(
-      future: ref.read(unifiedGoalRepoProvider).loadTags(item),
+      future: ref.read(termRepoProvider).loadTags(item),
       builder: (context, snap) {
         final tags = snap.data ?? const <Tag>[];
         if (tags.isEmpty) {
@@ -313,15 +295,15 @@ class _GoalTagChips extends ConsumerWidget {
   }
 }
 
-Future<void> _editGoalTags(BuildContext context, WidgetRef ref, GoalNode item) async {
-  final selected = await ref.read(unifiedGoalRepoProvider).loadTags(item);
+Future<void> _editGoalTags(BuildContext context, WidgetRef ref, Term item) async {
+  final selected = await ref.read(termRepoProvider).loadTags(item);
   final allTags = await ref.read(tagRepoProvider).watchAll().first;
   final result = await showDialog<List<Tag>>(
     context: context,
     builder: (context) => _TagPickerDialog(allTags: allTags, initial: selected),
   );
   if (result != null) {
-    await ref.read(unifiedGoalRepoProvider).setTags(item, result);
+    await ref.read(termRepoProvider).setTags(item, result);
   }
 }
 
@@ -385,9 +367,10 @@ class _TagPickerDialogState extends State<_TagPickerDialog> {
   }
 }
 
-class ShortTermDetailSheet extends ConsumerWidget {
-  const ShortTermDetailSheet({super.key, required this.shortTerm});
-  final ShortTerm shortTerm;
+class TermDetailSheet extends ConsumerWidget {
+  const TermDetailSheet({super.key, required this.goalId, required this.title});
+  final int goalId;
+  final String title;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -395,21 +378,22 @@ class ShortTermDetailSheet extends ConsumerWidget {
     return DraggableScrollableSheet(
       expand: false,
       builder: (context, controller) {
-        return _ShortTermDetailList(shortTerm: shortTerm, controller: controller);
+        return _TermDetailList(goalId: goalId, title: title, controller: controller);
       },
     );
   }
 }
 
-class _ShortTermDetailList extends ConsumerWidget {
-  const _ShortTermDetailList({required this.shortTerm, required this.controller});
-  final ShortTerm shortTerm;
+class _TermDetailList extends ConsumerWidget {
+  const _TermDetailList({required this.goalId, required this.title, required this.controller});
+  final int goalId;
+  final String title;
   final ScrollController controller;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final taskRepo = ref.read(taskRepoProvider);
-    final stream = taskRepo.watchByShortTerm(shortTerm.id);
+    final stream = taskRepo.watchByGoal(goalId);
     return StreamBuilder(
       stream: stream,
       builder: (context, snapshot) {
@@ -421,7 +405,7 @@ class _ShortTermDetailList extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  Text(shortTerm.title, style: Theme.of(context).textTheme.titleLarge),
+                  Text(title, style: Theme.of(context).textTheme.titleLarge),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.add_task),
@@ -429,7 +413,7 @@ class _ShortTermDetailList extends ConsumerWidget {
                       final title = await _askTitle(context, 'TODOを追加');
                       if (title != null) {
                         final t = await taskRepo.addQuick(title);
-                        t.shortTermId = shortTerm.id;
+                        t.shortTermId = goalId; // unified: tasks link to goalId
                         await taskRepo.update(t);
                       }
                     },
