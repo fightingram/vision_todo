@@ -171,11 +171,13 @@ class TermTile extends ConsumerWidget {
                 onPressed: () async {
                   final title = await _askTitle(context, 'Termを追加');
                   if (title != null) {
-                    final dreamId = item.dreamId ?? (await ref.read(longTermRepoProvider).getById(item.id))?.dreamId;
+                    final dreamId = item.dreamId;
                     if (dreamId == null) return;
-                    await ref.read(termRepoProvider).addTerm(title: title, dreamId: dreamId, parentGoalId: item.id);
-                  }
-                },
+                    await ref
+                        .read(termRepoProvider)
+                        .addTerm(title: title, dreamId: dreamId, parentGoalId: item.id);
+                    }
+                  },
               ),
               PopupMenuButton<String>(
                 onSelected: (v) async {
@@ -303,7 +305,7 @@ Future<void> _editGoalTags(BuildContext context, WidgetRef ref, Term item) async
     builder: (context) => _TagPickerDialog(allTags: allTags, initial: selected),
   );
   if (result != null) {
-    await ref.read(termRepoProvider).setTags(item, result);
+    await ref.read(termRepoProvider).updateTerm(item, result);
   }
 }
 

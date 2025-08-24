@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/dream.dart';
-// Unified: stop importing LongTerm/ShortTerm directly for rendering
+// Unified Term model for rendering
 import '../../models/task.dart';
-import '../../models/long_term.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
@@ -15,7 +14,6 @@ import '../todo/term_todo_page.dart';
 import '../terms/tags_page.dart';
 import '../../models/tag.dart';
 import '../../repositories/term_repositories.dart';
-import '../../providers/term_providers.dart' as gp;
 
 class MapsPage extends ConsumerWidget {
   const MapsPage({super.key});
@@ -154,7 +152,7 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     }
 
     // Append tasks as a separate row under all shorts.
-    // First, build clusters per LongTerm and lay them out left-to-right without overlap.
+    // First, build clusters per Term and lay them out left-to-right without overlap.
     final longPositions = <int, Offset>{
       for (final e in positions.entries)
         if (e.key.startsWith('term:')) int.parse(e.key.split(':')[1]): e.value
@@ -465,9 +463,9 @@ class _NodeCard extends ConsumerWidget {
                       if (node.level == 0) {
                         final allTags = ref.read(tagsProvider).value ??
                             await ref.read(tagRepoProvider).watchAll().first;
-                        final created = await showDialog<_LongTermCreateResult>(
+                        final created = await showDialog<_TermCreateResult>(
                           context: context,
-                          builder: (_) => _CreateLongTermDialog(allTags: allTags),
+                          builder: (_) => _CreateTermDialog(allTags: allTags),
                         );
                         if (created != null) {
                           final id = await ref.read(termRepoProvider).addTerm(
@@ -495,19 +493,18 @@ class _NodeCard extends ConsumerWidget {
                           await repo.put(updated);
                         }
                       } else if (node.level == 1) {
-                        final repo = ref.read(longTermRepoProvider);
+                        final repo = ref.read(termRepoProvider);
                         final ent = await repo.getById(node.id);
                         if (ent == null) break;
                         final allTags = ref.read(tagsProvider).value ??
                             await ref.read(tagRepoProvider).watchAll().first;
-                        await ent.tags.load();
-                        final updated = await showDialog<_LongTermEditResult>(
+                        final initialTags = await repo.loadTags(ent);
+                        final updated = await showDialog<_TermEditResult>(
                           context: context,
-                          builder: (_) => _EditLongTermDialog(initial: ent, allTags: allTags, initialTags: ent.tags.toList()),
+                          builder: (_) => _EditTermDialog(initial: ent, allTags: allTags, initialTags: initialTags),
                         );
                         if (updated != null) {
-                          // Persist fields + tags in one go via setTags
-                          await repo.setTags(updated.item, updated.tags);
+                          await repo.updateTerm(updated.item, updated.tags);
                         }
                       }
                       break;
@@ -539,7 +536,7 @@ class _NodeCard extends ConsumerWidget {
                 },
                 itemBuilder: (context) {
                   final items = <PopupMenuEntry<String>>[];
-                  // Remove ShortTerm creation path from Maps: only allow child for Dream
+                  // Only allow creating a child term under a Dream
                   if (node.level == 0) {
                     items.add(const PopupMenuItem(value: 'add_child', child: Text('子を追加')));
                   }
@@ -718,17 +715,17 @@ class _EditDreamDialogState extends State<_EditDreamDialog> {
   }
 }
 
-class _EditLongTermDialog extends StatefulWidget {
-  const _EditLongTermDialog({required this.initial, required this.allTags, required this.initialTags});
-  final LongTerm initial;
+class _EditTermDialog extends StatefulWidget {
+  const _EditTermDialog({required this.initial, required this.allTags, required this.initialTags});
+  final Term initial;
   final List<Tag> allTags;
   final List<Tag> initialTags;
 
   @override
-  State<_EditLongTermDialog> createState() => _EditLongTermDialogState();
+  State<_EditTermDialog> createState() => _EditTermDialogState();
 }
 
-class _EditLongTermDialogState extends State<_EditLongTermDialog> {
+class _EditTermDialogState extends State<_EditTermDialog> {
   late TextEditingController _title;
   late int _priority;
   DateTime? _dueAt;
@@ -828,18 +825,19 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
-            final updated = LongTerm(
+            final updated = Term(
               id: widget.initial.id,
               title: _title.text.trim().isEmpty ? widget.initial.title : _title.text.trim(),
+              parentId: widget.initial.parentId,
               dreamId: widget.initial.dreamId,
               priority: _priority,
               dueAt: _dueAt,
               archived: widget.initial.archived,
-            )
-              ..createdAt = widget.initial.createdAt
-              ..updatedAt = DateTime.now();
-            final selectedTags = widget.allTags.where((t) => _selectedTagIds.contains(t.id)).toList();
-            Navigator.pop(context, _LongTermEditResult(item: updated, tags: selectedTags));
+              color: widget.initial.color,
+            );
+            final selectedTags =
+                widget.allTags.where((t) => _selectedTagIds.contains(t.id)).toList();
+            Navigator.pop(context, _TermEditResult(item: updated, tags: selectedTags));
           },
           child: const Text('保存'),
         )
@@ -848,15 +846,15 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
   }
 }
 
-class _CreateLongTermDialog extends StatefulWidget {
-  const _CreateLongTermDialog({required this.allTags});
+class _CreateTermDialog extends StatefulWidget {
+  const _CreateTermDialog({required this.allTags});
   final List<Tag> allTags;
 
   @override
-  State<_CreateLongTermDialog> createState() => _CreateLongTermDialogState();
+  State<_CreateTermDialog> createState() => _CreateTermDialogState();
 }
 
-class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
+class _CreateTermDialogState extends State<_CreateTermDialog> {
   final TextEditingController _title = TextEditingController();
   final Set<int> _selectedTagIds = {};
   int _priority = 1;
@@ -953,7 +951,7 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
               return;
             }
             final tags = widget.allTags.where((e) => _selectedTagIds.contains(e.id)).toList();
-            Navigator.pop(context, _LongTermCreateResult(title: t, tags: tags, priority: _priority, dueAt: _dueAt));
+            Navigator.pop(context, _TermCreateResult(title: t, tags: tags, priority: _priority, dueAt: _dueAt));
           },
           child: const Text('作成'),
         ),
@@ -963,14 +961,14 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
 }
 
 
-class _LongTermEditResult {
-  _LongTermEditResult({required this.item, required this.tags});
-  final LongTerm item;
+class _TermEditResult {
+  _TermEditResult({required this.item, required this.tags});
+  final Term item;
   final List<Tag> tags;
 }
 
-class _LongTermCreateResult {
-  _LongTermCreateResult({required this.title, required this.tags, required this.priority, required this.dueAt});
+class _TermCreateResult {
+  _TermCreateResult({required this.title, required this.tags, required this.priority, required this.dueAt});
   final String title;
   final List<Tag> tags;
   final int priority;

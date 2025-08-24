@@ -32,8 +32,19 @@ class DreamRepository {
   }
 }
 
-// Unified Term view model that wraps LongTerm (parent) and ShortTerm (child) 
+// Unified Term view model that wraps LongTerm (parent) and ShortTerm (child)
 class Term {
+  Term({
+    required this.id,
+    required this.title,
+    required this.parentId,
+    required this.dreamId,
+    required this.priority,
+    required this.dueAt,
+    required this.archived,
+    this.color,
+  });
+
   Term.parent(LongTerm l)
       : id = l.id,
         title = l.title,
@@ -90,6 +101,23 @@ class TermRepository {
     });
   }
 
+  Future<Term?> getById(int id) async {
+    final long = await _isar.longTerms.get(id);
+    if (long != null) {
+      return Term.parent(long);
+    }
+    final short = await _isar.shortTerms.get(id);
+    if (short != null) {
+      int? dreamId;
+      if (short.longTermId != null) {
+        final parent = await _isar.longTerms.get(short.longTermId!);
+        dreamId = parent?.dreamId;
+      }
+      return Term.child(short, dreamIdOfParent: dreamId);
+    }
+    return null;
+  }
+
   Future<int> addTerm({
     required String title,
     required int dreamId,
@@ -118,17 +146,31 @@ class TermRepository {
     await ShortTermRepository(_db).delete(goal.id);
   }
 
-  Future<void> setTags(Term goal, List<Tag> tags) async {
+  Future<void> updateTerm(Term goal, List<Tag> tags) async {
     // Detect backing entity by presence in collections
     final isLong = await _isar.longTerms.get(goal.id) != null;
     if (isLong) {
       final repo = LongTermRepository(_db);
       final entity = await repo.getById(goal.id);
-      if (entity != null) await repo.setTags(entity, tags);
+      if (entity != null) {
+        entity
+          ..title = goal.title
+          ..priority = goal.priority
+          ..dueAt = goal.dueAt
+          ..archived = goal.archived;
+        await repo.setTags(entity, tags);
+      }
     } else {
       final repo = ShortTermRepository(_db);
       final entity = await repo.getById(goal.id);
-      if (entity != null) await repo.setTags(entity, tags);
+      if (entity != null) {
+        entity
+          ..title = goal.title
+          ..priority = goal.priority
+          ..dueAt = goal.dueAt
+          ..archived = goal.archived;
+        await repo.setTags(entity, tags);
+      }
     }
   }
 

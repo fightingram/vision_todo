@@ -161,7 +161,7 @@ class _LongFilteredSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Show tasks linked directly to this Term (LongTerm.id)
+    // Show tasks linked directly to this Term
     return FutureBuilder(
       future: ref.read(termRepoProvider).loadTags(item),
       builder: (context, snap) {

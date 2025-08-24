@@ -59,18 +59,14 @@ class TaskRepository {
     return q.watch(fireImmediately: true).asBroadcastStream();
   }
 
-  Stream<List<Task>> watchByShortTerm(int shortTermId) {
+  // Watch tasks linked to a specific Term
+  Stream<List<Task>> watchByGoal(int goalId) {
     return _isar.tasks
         .filter()
-        .shortTermIdEqualTo(shortTermId)
+        .shortTermIdEqualTo(goalId)
         .sortByCreatedAt()
         .watch(fireImmediately: true)
         .asBroadcastStream();
-  }
-
-  // Unified naming: watch tasks by Term (maps to ShortTerm under the hood)
-  Stream<List<Task>> watchByGoal(int goalId) {
-    return watchByShortTerm(goalId);
   }
 
   Stream<List<Task>> watchUnlinked() {
