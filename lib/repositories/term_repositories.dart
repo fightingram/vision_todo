@@ -32,8 +32,19 @@ class DreamRepository {
   }
 }
 
-// Unified Term view model that wraps LongTerm (parent) and ShortTerm (child) 
+// Unified Term view model that wraps LongTerm (parent) and ShortTerm (child)
 class Term {
+  Term({
+    required this.id,
+    required this.title,
+    required this.parentId,
+    required this.dreamId,
+    required this.priority,
+    required this.dueAt,
+    required this.archived,
+    this.color,
+  });
+
   Term.parent(LongTerm l)
       : id = l.id,
         title = l.title,
@@ -56,7 +67,7 @@ class Term {
 
   final int id;
   final String title;
-  final int? parentId; // null for top-level goal
+  final int? parentId; // null for top-level term
   final int? dreamId; // non-null for top-level; derived for child
   final int priority;
   final DateTime? dueAt;
@@ -69,66 +80,103 @@ class TermRepository {
   final IsarService _db;
   Isar get _isar => _db.isar;
 
-  // Top-level goals under a Dream (LongTerm)
-  Stream<List<Term>> watchByDream(int? dreamId, {bool includeArchived = false}) {
+  // Top-level terms under a Dream (LongTerm)
+  Stream<List<Term>> watchByDream(int? dreamId,
+      {bool includeArchived = false}) {
     final longRepo = LongTermRepository(_db);
     return longRepo.watchByDream(dreamId, includeArchived: includeArchived).map(
-      (list) => list.map((l) => Term.parent(l)).toList(),
-    );
+          (list) => list.map((l) => Term.parent(l)).toList(),
+        );
   }
 
   // Child terms under a Term (ShortTerm under LongTerm)
-  Stream<List<Term>> watchChildren(int parentGoalId, {bool includeArchived = false}) {
+  Stream<List<Term>> watchChildren(int parentId,
+      {bool includeArchived = false}) {
     final shortRepo = ShortTermRepository(_db);
     return shortRepo
-        .watchByLongTerm(parentGoalId, includeArchived: includeArchived)
+        .watchByLongTerm(parentId, includeArchived: includeArchived)
         .asyncMap((shorts) async {
       // Need dreamId for children; fetch the parent LongTerm once
-      final parent = await _isar.longTerms.get(parentGoalId);
+      final parent = await _isar.longTerms.get(parentId);
       final parentDreamId = parent?.dreamId;
-      return shorts.map((s) => Term.child(s, dreamIdOfParent: parentDreamId)).toList();
+      return shorts
+          .map((s) => Term.child(s, dreamIdOfParent: parentDreamId))
+          .toList();
     });
+  }
+
+  Future<Term?> getById(int id) async {
+    final long = await _isar.longTerms.get(id);
+    if (long != null) {
+      return Term.parent(long);
+    }
+    final short = await _isar.shortTerms.get(id);
+    if (short != null) {
+      int? dreamId;
+      if (short.longTermId != null) {
+        final parent = await _isar.longTerms.get(short.longTermId!);
+        dreamId = parent?.dreamId;
+      }
+      return Term.child(short, dreamIdOfParent: dreamId);
+    }
+    return null;
   }
 
   Future<int> addTerm({
     required String title,
     required int dreamId,
-    int? parentGoalId,
+    int? parentId,
     int priority = 1,
     DateTime? dueAt,
   }) async {
-    if (parentGoalId == null) {
-      final ent = LongTerm(title: title, dreamId: dreamId, priority: priority, dueAt: dueAt);
+    if (parentId == null) {
+      final ent = LongTerm(
+          title: title, dreamId: dreamId, priority: priority, dueAt: dueAt);
       await LongTermRepository(_db).put(ent);
       return ent.id;
     } else {
-      final ent = ShortTerm(title: title, longTermId: parentGoalId, priority: priority, dueAt: dueAt);
+      final ent = ShortTerm(
+          title: title, longTermId: parentId, priority: priority, dueAt: dueAt);
       await ShortTermRepository(_db).put(ent);
       return ent.id;
     }
   }
 
-  Future<void> deleteTerm(Term goal) async {
+  Future<void> deleteTerm(Term term) async {
     // Try delete as LongTerm first; if not exists, try ShortTerm
-    final existedLong = await _isar.longTerms.get(goal.id) != null;
+    final existedLong = await _isar.longTerms.get(term.id) != null;
     if (existedLong) {
-      await LongTermRepository(_db).delete(goal.id);
+      await LongTermRepository(_db).delete(term.id);
       return;
     }
-    await ShortTermRepository(_db).delete(goal.id);
+    await ShortTermRepository(_db).delete(term.id);
   }
 
-  Future<void> setTags(Term goal, List<Tag> tags) async {
+  Future<void> updateTerm(Term term, List<Tag> tags) async {
     // Detect backing entity by presence in collections
-    final isLong = await _isar.longTerms.get(goal.id) != null;
+    final isLong = await _isar.longTerms.get(term.id) != null;
     if (isLong) {
       final repo = LongTermRepository(_db);
-      final entity = await repo.getById(goal.id);
-      if (entity != null) await repo.setTags(entity, tags);
+      final entity = await repo.getById(term.id);
+      if (entity != null) {
+        entity
+          ..title = term.title
+          ..priority = term.priority
+          ..dueAt = term.dueAt
+          ..archived = term.archived;
+        await repo.setTags(entity, tags);
+      }
     } else {
       final repo = ShortTermRepository(_db);
-      final entity = await repo.getById(goal.id);
-      if (entity != null) await repo.setTags(entity, tags);
+      final entity = await repo.getById(term.id);
+      if (entity != null) {
+        entity
+          ..title = term.title
+          ..priority = term.priority
+          ..dueAt = term.dueAt
+          ..archived = term.archived;
+        await repo.setTags(entity, tags);
+      }
     }
   }
 
@@ -145,37 +193,37 @@ class TermRepository {
     }
   }
 
-  Future<List<Tag>> loadTags(Term goal) async {
-    final isLong = await _isar.longTerms.get(goal.id) != null;
+  Future<List<Tag>> loadTags(Term term) async {
+    final isLong = await _isar.longTerms.get(term.id) != null;
     if (isLong) {
-      final entity = await _isar.longTerms.get(goal.id);
+      final entity = await _isar.longTerms.get(term.id);
       if (entity == null) return const [];
       await entity.tags.load();
       return entity.tags.toList();
     } else {
-      final entity = await _isar.shortTerms.get(goal.id);
+      final entity = await _isar.shortTerms.get(term.id);
       if (entity == null) return const [];
       await entity.tags.load();
       return entity.tags.toList();
     }
   }
 
-  Future<void> archiveTerm(Term goal, {required bool archived}) async {
-    final isLong = await _isar.longTerms.get(goal.id) != null;
+  Future<void> archiveTerm(Term term, {required bool archived}) async {
+    final isLong = await _isar.longTerms.get(term.id) != null;
     if (isLong) {
-      final ent = await LongTermRepository(_db).getById(goal.id);
+      final ent = await LongTermRepository(_db).getById(term.id);
       if (ent == null) return;
       ent.archived = archived;
       await LongTermRepository(_db).put(ent);
     } else {
-      final ent = await ShortTermRepository(_db).getById(goal.id);
+      final ent = await ShortTermRepository(_db).getById(term.id);
       if (ent == null) return;
       ent.archived = archived;
       await ShortTermRepository(_db).put(ent);
     }
   }
 
-  // All child goals (across any parent)
+  // All child terms (across any parent)
   Stream<List<Term>> watchAllChildren({bool includeArchived = false}) {
     final shortRepo = ShortTermRepository(_db);
     return shortRepo
@@ -194,7 +242,7 @@ class TermRepository {
     });
   }
 
-  // Watch a single goal with tags (works for both top-level and child goals)
+  // Watch a single term with tags (works for both top-level and child terms)
   Stream<TermWithTags?> watchWithTags(int id) async* {
     final existedLong = await _isar.longTerms.get(id);
     if (existedLong != null) {
@@ -218,13 +266,15 @@ class TermRepository {
         final p = await _isar.longTerms.get(item.longTermId!);
         dreamId = p?.dreamId;
       }
-      return TermWithTags(item: Term.child(item, dreamIdOfParent: dreamId), tags: item.tags.toList());
+      return TermWithTags(
+          item: Term.child(item, dreamIdOfParent: dreamId),
+          tags: item.tags.toList());
     });
   }
 }
 
-class GoalWithTags {
-  GoalWithTags({required this.item, required this.tags});
+class LongTermWithTags {
+  LongTermWithTags({required this.item, required this.tags});
   final LongTerm item;
   final List<Tag> tags;
 }
@@ -252,15 +302,9 @@ class LongTermRepository {
     final q = dreamId == null
         ? (includeArchived
             ? _isar.longTerms.where().sortByCreatedAt()
-            : _isar.longTerms
-                .filter()
-                .archivedEqualTo(false)
-                .sortByCreatedAt())
+            : _isar.longTerms.filter().archivedEqualTo(false).sortByCreatedAt())
         : (includeArchived
-            ? _isar.longTerms
-                .filter()
-                .dreamIdEqualTo(dreamId)
-                .sortByCreatedAt()
+            ? _isar.longTerms.filter().dreamIdEqualTo(dreamId).sortByCreatedAt()
             : _isar.longTerms
                 .filter()
                 .dreamIdEqualTo(dreamId)
@@ -282,11 +326,13 @@ class LongTermRepository {
     return _isar.longTerms.get(id);
   }
 
-  Stream<GoalWithTags?> watchWithTags(int id) {
-    return _isar.longTerms.watchObject(id, fireImmediately: true).asyncMap((item) async {
+  Stream<LongTermWithTags?> watchWithTags(int id) {
+    return _isar.longTerms
+        .watchObject(id, fireImmediately: true)
+        .asyncMap((item) async {
       if (item == null) return null;
       await item.tags.load();
-      return GoalWithTags(item: item, tags: item.tags.toList());
+      return LongTermWithTags(item: item, tags: item.tags.toList());
     });
   }
 
@@ -367,7 +413,9 @@ class ShortTermRepository {
   }
 
   Stream<ShortTermWithTags?> watchWithTags(int id) {
-    return _isar.shortTerms.watchObject(id, fireImmediately: true).asyncMap((item) async {
+    return _isar.shortTerms
+        .watchObject(id, fireImmediately: true)
+        .asyncMap((item) async {
       if (item == null) return null;
       await item.tags.load();
       return ShortTermWithTags(item: item, tags: item.tags.toList());

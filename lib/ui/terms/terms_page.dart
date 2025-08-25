@@ -49,7 +49,9 @@ class TermsPage extends ConsumerWidget {
                         onPressed: () async {
                           final title = await _askTitle(context, '夢を追加');
                           if (title != null) {
-                            await ref.read(dreamRepoProvider).put(Dream(title: title));
+                            await ref
+                                .read(dreamRepoProvider)
+                                .put(Dream(title: title));
                           }
                         },
                         icon: const Icon(Icons.add),
@@ -63,7 +65,8 @@ class TermsPage extends ConsumerWidget {
                         ? const Center(child: Text('まだTermがありません'))
                         : ListView.builder(
                             itemCount: dreams.length,
-                            itemBuilder: (context, i) => DreamTile(dream: dreams[i]),
+                            itemBuilder: (context, i) =>
+                                DreamTile(dream: dreams[i]),
                           ),
                   ),
                 ],
@@ -95,7 +98,9 @@ class DreamTile extends ConsumerWidget {
               onPressed: () async {
                 final title = await _askTitle(context, 'Termを追加');
                 if (title != null) {
-                  await ref.read(termRepoProvider).addTerm(title: title, dreamId: dream.id);
+                  await ref
+                      .read(termRepoProvider)
+                      .addTerm(title: title, dreamId: dream.id);
                 }
               },
             ),
@@ -112,7 +117,9 @@ class DreamTile extends ConsumerWidget {
                 }
               },
               itemBuilder: (context) => [
-                PopupMenuItem(value: dream.archived ? 'unarchive' : 'archive', child: Text(dream.archived ? 'アーカイブ解除' : 'アーカイブ')),
+                PopupMenuItem(
+                    value: dream.archived ? 'unarchive' : 'archive',
+                    child: Text(dream.archived ? 'アーカイブ解除' : 'アーカイブ')),
                 const PopupMenuItem(value: 'delete', child: Text('削除')),
               ],
             ),
@@ -155,7 +162,7 @@ class TermTile extends ConsumerWidget {
             children: [
               const Text('TODOはTODOタブから管理'),
               const SizedBox(height: 4),
-              _GoalTagChips(item: item),
+              _TermTagChips(item: item),
             ],
           ),
           trailing: Row(
@@ -164,31 +171,38 @@ class TermTile extends ConsumerWidget {
               IconButton(
                 tooltip: 'タグを編集',
                 icon: const Icon(Icons.label),
-                onPressed: () => _editGoalTags(context, ref, item),
+                onPressed: () => _editTermTags(context, ref, item),
               ),
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () async {
                   final title = await _askTitle(context, 'Termを追加');
                   if (title != null) {
-                    final dreamId = item.dreamId ?? (await ref.read(longTermRepoProvider).getById(item.id))?.dreamId;
+                    final dreamId = item.dreamId;
                     if (dreamId == null) return;
-                    await ref.read(termRepoProvider).addTerm(title: title, dreamId: dreamId, parentGoalId: item.id);
+                    await ref.read(termRepoProvider).addTerm(
+                        title: title, dreamId: dreamId, parentId: item.id);
                   }
                 },
               ),
               PopupMenuButton<String>(
                 onSelected: (v) async {
                   if (v == 'archive') {
-                    await ref.read(termRepoProvider).archiveTerm(item, archived: true);
+                    await ref
+                        .read(termRepoProvider)
+                        .archiveTerm(item, archived: true);
                   } else if (v == 'unarchive') {
-                    await ref.read(termRepoProvider).archiveTerm(item, archived: false);
+                    await ref
+                        .read(termRepoProvider)
+                        .archiveTerm(item, archived: false);
                   } else if (v == 'delete') {
                     await ref.read(termRepoProvider).deleteTerm(item);
                   }
                 },
                 itemBuilder: (context) => [
-                  PopupMenuItem(value: item.archived ? 'unarchive' : 'archive', child: Text(item.archived ? 'アーカイブ解除' : 'アーカイブ')),
+                  PopupMenuItem(
+                      value: item.archived ? 'unarchive' : 'archive',
+                      child: Text(item.archived ? 'アーカイブ解除' : 'アーカイブ')),
                   const PopupMenuItem(value: 'delete', child: Text('削除')),
                 ],
               ),
@@ -205,7 +219,7 @@ class TermTile extends ConsumerWidget {
                 child: Text('エラー: $e'),
               ),
               data: (items) => Column(
-              children: items.map((s) => TermChildTile(item: s)).toList(),
+                children: items.map((s) => TermChildTile(item: s)).toList(),
               ),
             ),
           ],
@@ -228,7 +242,7 @@ class TermChildTile extends ConsumerWidget {
         children: [
           const Text('タップで配下TODOのCRUD'),
           const SizedBox(height: 4),
-          _GoalTagChips(item: item),
+          _TermTagChips(item: item),
         ],
       ),
       trailing: Row(
@@ -237,20 +251,26 @@ class TermChildTile extends ConsumerWidget {
           IconButton(
             tooltip: 'タグを編集',
             icon: const Icon(Icons.label),
-            onPressed: () => _editGoalTags(context, ref, item),
+            onPressed: () => _editTermTags(context, ref, item),
           ),
           PopupMenuButton<String>(
             onSelected: (v) async {
               if (v == 'archive') {
-                await ref.read(termRepoProvider).archiveTerm(item, archived: true);
+                await ref
+                    .read(termRepoProvider)
+                    .archiveTerm(item, archived: true);
               } else if (v == 'unarchive') {
-                await ref.read(termRepoProvider).archiveTerm(item, archived: false);
+                await ref
+                    .read(termRepoProvider)
+                    .archiveTerm(item, archived: false);
               } else if (v == 'delete') {
                 await ref.read(termRepoProvider).deleteTerm(item);
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem(value: item.archived ? 'unarchive' : 'archive', child: Text(item.archived ? 'アーカイブ解除' : 'アーカイブ')),
+              PopupMenuItem(
+                  value: item.archived ? 'unarchive' : 'archive',
+                  child: Text(item.archived ? 'アーカイブ解除' : 'アーカイブ')),
               const PopupMenuItem(value: 'delete', child: Text('削除')),
             ],
           ),
@@ -260,14 +280,15 @@ class TermChildTile extends ConsumerWidget {
         context: context,
         useSafeArea: true,
         isScrollControlled: true,
-        builder: (context) => TermDetailSheet(goalId: item.id, title: item.title),
+        builder: (context) =>
+            TermDetailSheet(termId: item.id, title: item.title),
       ),
     );
   }
 }
 
-class _GoalTagChips extends ConsumerWidget {
-  const _GoalTagChips({required this.item});
+class _TermTagChips extends ConsumerWidget {
+  const _TermTagChips({required this.item});
   final Term item;
 
   @override
@@ -295,7 +316,8 @@ class _GoalTagChips extends ConsumerWidget {
   }
 }
 
-Future<void> _editGoalTags(BuildContext context, WidgetRef ref, Term item) async {
+Future<void> _editTermTags(
+    BuildContext context, WidgetRef ref, Term item) async {
   final selected = await ref.read(termRepoProvider).loadTags(item);
   final allTags = await ref.read(tagRepoProvider).watchAll().first;
   final result = await showDialog<List<Tag>>(
@@ -303,7 +325,7 @@ Future<void> _editGoalTags(BuildContext context, WidgetRef ref, Term item) async
     builder: (context) => _TagPickerDialog(allTags: allTags, initial: selected),
   );
   if (result != null) {
-    await ref.read(termRepoProvider).setTags(item, result);
+    await ref.read(termRepoProvider).updateTerm(item, result);
   }
 }
 
@@ -348,16 +370,21 @@ class _TagPickerDialogState extends State<_TagPickerDialog> {
                             });
                           },
                           title: Text(t.name),
-                          secondary: CircleAvatar(backgroundColor: Color(t.color)),
+                          secondary:
+                              CircleAvatar(backgroundColor: Color(t.color)),
                         ))
                     .toList(),
               ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
-            final result = widget.allTags.where((t) => _selectedIds.contains(t.id)).toList();
+            final result = widget.allTags
+                .where((t) => _selectedIds.contains(t.id))
+                .toList();
             Navigator.pop(context, result);
           },
           child: const Text('保存'),
@@ -368,8 +395,8 @@ class _TagPickerDialogState extends State<_TagPickerDialog> {
 }
 
 class TermDetailSheet extends ConsumerWidget {
-  const TermDetailSheet({super.key, required this.goalId, required this.title});
-  final int goalId;
+  const TermDetailSheet({super.key, required this.termId, required this.title});
+  final int termId;
   final String title;
 
   @override
@@ -378,22 +405,24 @@ class TermDetailSheet extends ConsumerWidget {
     return DraggableScrollableSheet(
       expand: false,
       builder: (context, controller) {
-        return _TermDetailList(goalId: goalId, title: title, controller: controller);
+        return _TermDetailList(
+            termId: termId, title: title, controller: controller);
       },
     );
   }
 }
 
 class _TermDetailList extends ConsumerWidget {
-  const _TermDetailList({required this.goalId, required this.title, required this.controller});
-  final int goalId;
+  const _TermDetailList(
+      {required this.termId, required this.title, required this.controller});
+  final int termId;
   final String title;
   final ScrollController controller;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final taskRepo = ref.read(taskRepoProvider);
-    final stream = taskRepo.watchByGoal(goalId);
+    final stream = taskRepo.watchByTerm(termId);
     return StreamBuilder(
       stream: stream,
       builder: (context, snapshot) {
@@ -413,7 +442,7 @@ class _TermDetailList extends ConsumerWidget {
                       final title = await _askTitle(context, 'TODOを追加');
                       if (title != null) {
                         final t = await taskRepo.addQuick(title);
-                        t.shortTermId = goalId; // unified: tasks link to goalId
+                        t.shortTermId = termId; // unified: tasks link to termId
                         await taskRepo.update(t);
                       }
                     },
@@ -460,8 +489,12 @@ Future<String?> _askTitle(BuildContext context, String title) async {
         onSubmitted: (_) => Navigator.of(context).pop(controller.text.trim()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('追加')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
+        FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('追加')),
       ],
     ),
   );

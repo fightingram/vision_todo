@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/dream.dart';
-// Unified: stop importing LongTerm/ShortTerm directly for rendering
+// Unified Term model for rendering
 import '../../models/task.dart';
-import '../../models/long_term.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
@@ -15,7 +14,6 @@ import '../todo/term_todo_page.dart';
 import '../terms/tags_page.dart';
 import '../../models/tag.dart';
 import '../../repositories/term_repositories.dart';
-import '../../providers/term_providers.dart' as gp;
 
 class MapsPage extends ConsumerWidget {
   const MapsPage({super.key});
@@ -79,22 +77,22 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
   @override
   Widget build(BuildContext context) {
     final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
-    final topGoals = ref.watch(allTopTermsProvider).value ?? const <Term>[];
-    final childGoals = ref.watch(allChildTermsProvider).value ?? const <Term>[];
+    final topTerms = ref.watch(allTopTermsProvider).value ?? const <Term>[];
+    final childTerms = ref.watch(allChildTermsProvider).value ?? const <Term>[];
     final tasks = ref.watch(tasksStreamProvider).value ?? const <Task>[];
 
     // Build hierarchy
     final nodes = <_Node>[];
     for (final d in dreams) {
       nodes.add(_Node.level0(d));
-      final parents = topGoals.where((g) => g.dreamId == d.id).toList();
+      final parents = topTerms.where((g) => g.dreamId == d.id).toList();
       for (final p in parents) {
         nodes.add(_Node.level1Term(p, parentId: d.id));
-        final children = childGoals.where((c) => c.parentId == p.id).toList();
+        final children = childTerms.where((c) => c.parentId == p.id).toList();
         for (final c in children) {
           nodes.add(_Node.level2Term(c, parentId: p.id));
         }
-        // Append tasks under each parent goal as level 3 nodes
+        // Append tasks under each parent term as level 3 nodes
         final childrenT = tasks.where((t) => t.shortTermId == p.id).toList();
         for (final t in childrenT) {
           nodes.add(_Node.level3(t, parentId: p.id));
@@ -118,7 +116,11 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     double minX = double.infinity, minY = double.infinity;
     double maxX = -double.infinity, maxY = -double.infinity;
     // Pre-calc canvas height from rows
-    double totalHeight = pad * 2 + nodeH * 3 + vGap * 2 + taskH + vGap; // leave space for tasks row
+    double totalHeight = pad * 2 +
+        nodeH * 3 +
+        vGap * 2 +
+        taskH +
+        vGap; // leave space for tasks row
 
     for (var i = 0; i < dreamIds.length; i++) {
       final dx = pad + i * (nodeW + 240);
@@ -127,7 +129,7 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
       minY = math.min(minY, pad);
       maxX = math.max(maxX, dx + nodeW);
       maxY = math.max(maxY, pad + nodeH);
-      final lp = topGoals.where((g) => g.dreamId == dreamIds[i]).toList();
+      final lp = topTerms.where((g) => g.dreamId == dreamIds[i]).toList();
       if (lp.isEmpty) continue;
       final baseX = dx - ((lp.length - 1) / 2) * (nodeW + hGap);
       for (var j = 0; j < lp.length; j++) {
@@ -138,7 +140,7 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
         minY = math.min(minY, ly);
         maxX = math.max(maxX, lx + nodeW);
         maxY = math.max(maxY, ly + nodeH);
-        final sp = childGoals.where((s) => s.parentId == lp[j].id).toList();
+        final sp = childTerms.where((s) => s.parentId == lp[j].id).toList();
         if (sp.isEmpty) continue;
         final sBaseX = lx - ((sp.length - 1) / 2) * (nodeW + hGap / 2);
         for (var k = 0; k < sp.length; k++) {
@@ -154,14 +156,14 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     }
 
     // Append tasks as a separate row under all shorts.
-    // First, build clusters per LongTerm and lay them out left-to-right without overlap.
+    // First, build clusters per Term and lay them out left-to-right without overlap.
     final longPositions = <int, Offset>{
       for (final e in positions.entries)
         if (e.key.startsWith('term:')) int.parse(e.key.split(':')[1]): e.value
     };
     // Collect clusters (centered at long center)
     final clusters = <_TaskCluster>[];
-    for (final g in topGoals) {
+    for (final g in topTerms) {
       final lp = longPositions[g.id];
       if (lp == null) continue;
       final ts = tasks.where((t) => t.shortTermId == g.id).toList();
@@ -177,7 +179,8 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     clusters.sort((a, b) => a.centerX.compareTo(b.centerX));
     double lastRight = -double.infinity;
     const minClusterGap = 24.0; // minimum gap between clusters
-    final taskRowY = pad + (nodeH + vGap) * 2 + nodeH + vGap; // below shorts with extra gap
+    final taskRowY =
+        pad + (nodeH + vGap) * 2 + nodeH + vGap; // below shorts with extra gap
     for (final c in clusters) {
       final width = c.tasks.length * (nodeW + taskHGap) - taskHGap;
       double left = c.centerX - width / 2;
@@ -219,33 +222,41 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
     final edges = <(_Node, _Node)>[];
     for (final n in nodes) {
       if (n.level == 1) {
-        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 0, orElse: () => _Node.empty());
+        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 0,
+            orElse: () => _Node.empty());
         if (!p.isEmpty) edges.add((p, n));
       } else if (n.level == 2) {
-        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1, orElse: () => _Node.empty());
+        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1,
+            orElse: () => _Node.empty());
         if (!p.isEmpty) edges.add((p, n));
       } else if (n.level == 3) {
-        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1, orElse: () => _Node.empty());
+        final p = nodes.firstWhere((e) => e.id == n.parentId && e.level == 1,
+            orElse: () => _Node.empty());
         if (!p.isEmpty) edges.add((p, n));
       }
     }
 
     // Canvas with pan/zoom
     // Fit-to-view setup
-    final newHash = nodes.fold<int>(0, (acc, n) => acc ^ n.id ^ (n.level << 4) ^ n.type.hashCode);
+    final newHash = nodes.fold<int>(
+        0, (acc, n) => acc ^ n.id ^ (n.level << 4) ^ n.type.hashCode);
 
     return LayoutBuilder(builder: (context, viewport) {
       // Auto-fit on content change
       if (newHash != _layoutHash && contentWidth > 0 && contentHeight > 0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _layoutHash = newHash;
-          _fitToView(Size(viewport.maxWidth, viewport.maxHeight), contentWidth, contentHeight);
+          _fitToView(Size(viewport.maxWidth, viewport.maxHeight), contentWidth,
+              contentHeight);
         });
       }
 
-      void zoomIn() => _zoomTo((_tc.value.getMaxScaleOnAxis() * 1.2).clamp(_minScale, _maxScale));
-      void zoomOut() => _zoomTo((_tc.value.getMaxScaleOnAxis() / 1.2).clamp(_minScale, _maxScale));
-      void fit() => _fitToView(Size(viewport.maxWidth, viewport.maxHeight), contentWidth, contentHeight);
+      void zoomIn() => _zoomTo(
+          (_tc.value.getMaxScaleOnAxis() * 1.2).clamp(_minScale, _maxScale));
+      void zoomOut() => _zoomTo(
+          (_tc.value.getMaxScaleOnAxis() / 1.2).clamp(_minScale, _maxScale));
+      void fit() => _fitToView(Size(viewport.maxWidth, viewport.maxHeight),
+          contentWidth, contentHeight);
 
       return Stack(
         children: [
@@ -272,7 +283,8 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
                 ),
                 // Nodes
                 ...nodes.map((n) {
-                  final pos = normalized['${n.type}:${n.id}'] ?? const Offset(0, 0);
+                  final pos =
+                      normalized['${n.type}:${n.id}'] ?? const Offset(0, 0);
                   return Positioned(
                     left: pos.dx,
                     top: pos.dy,
@@ -305,7 +317,9 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
   void _fitToView(Size viewport, double contentWidth, double contentHeight) {
     final vw = viewport.width;
     final vh = viewport.height;
-    final scale = math.min(vw / contentWidth, vh / contentHeight).clamp(_minScale, _maxScale);
+    final scale = math
+        .min(vw / contentWidth, vh / contentHeight)
+        .clamp(_minScale, _maxScale);
     final tx = (vw - contentWidth * scale) / 2;
     final ty = (vh - contentHeight * scale) / 2;
     _tc.value = Matrix4.identity()
@@ -315,7 +329,8 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
 }
 
 class _ZoomControls extends StatelessWidget {
-  const _ZoomControls({required this.onIn, required this.onOut, required this.onFit});
+  const _ZoomControls(
+      {required this.onIn, required this.onOut, required this.onFit});
   final VoidCallback onIn;
   final VoidCallback onOut;
   final VoidCallback onFit;
@@ -330,9 +345,16 @@ class _ZoomControls extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(tooltip: '拡大', icon: const Icon(Icons.add), onPressed: onIn),
-            IconButton(tooltip: '縮小', icon: const Icon(Icons.remove), onPressed: onOut),
-            IconButton(tooltip: 'フィット', icon: const Icon(Icons.fit_screen), onPressed: onFit),
+            IconButton(
+                tooltip: '拡大', icon: const Icon(Icons.add), onPressed: onIn),
+            IconButton(
+                tooltip: '縮小',
+                icon: const Icon(Icons.remove),
+                onPressed: onOut),
+            IconButton(
+                tooltip: 'フィット',
+                icon: const Icon(Icons.fit_screen),
+                onPressed: onFit),
           ],
         ),
       ),
@@ -341,7 +363,15 @@ class _ZoomControls extends StatelessWidget {
 }
 
 class _Node {
-  _Node({required this.id, required this.title, required this.level, this.parentId, required this.type, this.priority, this.done, this.dueAt});
+  _Node(
+      {required this.id,
+      required this.title,
+      required this.level,
+      this.parentId,
+      required this.type,
+      this.priority,
+      this.done,
+      this.dueAt});
   final int id;
   final String title;
   final int level; // 0 dream, 1 long, 2 short
@@ -351,9 +381,12 @@ class _Node {
   final bool? done; // for task
   final DateTime? dueAt; // for task
 
-  static _Node level0(Dream d) => _Node(id: d.id, title: d.title, level: 0, type: 'dream');
-  static _Node level1Term(Term g, {required int parentId}) => _Node(id: g.id, title: g.title, level: 1, parentId: parentId, type: 'term');
-  static _Node level2Term(Term g, {required int parentId}) => _Node(id: g.id, title: g.title, level: 2, parentId: parentId, type: 'term');
+  static _Node level0(Dream d) =>
+      _Node(id: d.id, title: d.title, level: 0, type: 'dream');
+  static _Node level1Term(Term g, {required int parentId}) => _Node(
+      id: g.id, title: g.title, level: 1, parentId: parentId, type: 'term');
+  static _Node level2Term(Term g, {required int parentId}) => _Node(
+      id: g.id, title: g.title, level: 2, parentId: parentId, type: 'term');
   static _Node level3(Task t, {required int parentId}) => _Node(
         id: t.id,
         title: t.title,
@@ -370,7 +403,11 @@ class _Node {
 }
 
 class _EdgesPainter extends CustomPainter {
-  _EdgesPainter({required this.nodes, required this.positions, required this.nodeSize, required this.edges});
+  _EdgesPainter(
+      {required this.nodes,
+      required this.positions,
+      required this.nodeSize,
+      required this.edges});
   final List<_Node> nodes;
   final Map<String, Offset> positions;
   final Size nodeSize;
@@ -386,7 +423,8 @@ class _EdgesPainter extends CustomPainter {
     for (final (p, c) in edges) {
       final pPos = positions['${p.type}:${p.id}'] ?? Offset.zero;
       final cPos = positions['${c.type}:${c.id}'] ?? Offset.zero;
-      final pCenter = Offset(pPos.dx + nodeSize.width / 2, pPos.dy + nodeSize.height);
+      final pCenter =
+          Offset(pPos.dx + nodeSize.width / 2, pPos.dy + nodeSize.height);
       final cCenter = Offset(cPos.dx + nodeSize.width / 2, cPos.dy);
 
       final midY = (pCenter.dy + cCenter.dy) / 2;
@@ -399,7 +437,9 @@ class _EdgesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EdgesPainter oldDelegate) {
-    return oldDelegate.positions != positions || oldDelegate.nodes != nodes || oldDelegate.edges != edges;
+    return oldDelegate.positions != positions ||
+        oldDelegate.nodes != nodes ||
+        oldDelegate.edges != edges;
   }
 }
 
@@ -426,7 +466,8 @@ class _NodeCard extends ConsumerWidget {
           if (node.level == 1) {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => TermTodoPage(goalId: node.id, goalTitle: node.title),
+                builder: (_) =>
+                    TermTodoPage(termId: node.id, termTitle: node.title),
               ),
             );
           } else if (node.level == 2) {
@@ -434,7 +475,8 @@ class _NodeCard extends ConsumerWidget {
               context: context,
               useSafeArea: true,
               isScrollControlled: true,
-              builder: (context) => TermDetailSheet(goalId: node.id, title: node.title),
+              builder: (context) =>
+                  TermDetailSheet(termId: node.id, title: node.title),
             );
           } else if (node.type == 'task') {
             // Display-only for now
@@ -446,7 +488,7 @@ class _NodeCard extends ConsumerWidget {
             children: [
               Expanded(
                 child: switch (node.level) {
-                  1 => _GoalNodeContent(node: node),
+                  1 => _TermNodeContent(node: node),
                   3 => _TaskNodeContent(node: node),
                   _ => Text(
                       node.title,
@@ -458,100 +500,114 @@ class _NodeCard extends ConsumerWidget {
               ),
               if (node.level != 3)
                 PopupMenuButton<String>(
-                onSelected: (v) async {
-                  switch (v) {
-                    case 'add_child':
-                      // Create a top-level goal under Dream with a full form
-                      if (node.level == 0) {
-                        final allTags = ref.read(tagsProvider).value ??
-                            await ref.read(tagRepoProvider).watchAll().first;
-                        final created = await showDialog<_LongTermCreateResult>(
-                          context: context,
-                          builder: (_) => _CreateLongTermDialog(allTags: allTags),
-                        );
-                        if (created != null) {
-                          final id = await ref.read(termRepoProvider).addTerm(
-                                title: created.title,
-                                dreamId: node.id,
-                                priority: created.priority,
-                                dueAt: created.dueAt,
-                              );
-                          if (created.tags.isNotEmpty) {
-                            await ref.read(termRepoProvider).setTagsById(id, created.tags);
+                  onSelected: (v) async {
+                    switch (v) {
+                      case 'add_child':
+                        // Create a top-level term under Dream with a full form
+                        if (node.level == 0) {
+                          final allTags = ref.read(tagsProvider).value ??
+                              await ref.read(tagRepoProvider).watchAll().first;
+                          final created = await showDialog<_TermCreateResult>(
+                            context: context,
+                            builder: (_) => _CreateTermDialog(allTags: allTags),
+                          );
+                          if (created != null) {
+                            final id = await ref.read(termRepoProvider).addTerm(
+                                  title: created.title,
+                                  dreamId: node.id,
+                                  priority: created.priority,
+                                  dueAt: created.dueAt,
+                                );
+                            if (created.tags.isNotEmpty) {
+                              await ref
+                                  .read(termRepoProvider)
+                                  .setTagsById(id, created.tags);
+                            }
                           }
                         }
-                      }
-                      break;
-                    case 'edit':
-                      if (node.level == 0) {
-                        final repo = ref.read(dreamRepoProvider);
-                        final ent = await repo.getById(node.id);
-                        if (ent == null) break;
-                        final updated = await showDialog<Dream>(
-                          context: context,
-                          builder: (_) => _EditDreamDialog(initial: ent),
-                        );
-                        if (updated != null) {
-                          await repo.put(updated);
+                        break;
+                      case 'edit':
+                        if (node.level == 0) {
+                          final repo = ref.read(dreamRepoProvider);
+                          final ent = await repo.getById(node.id);
+                          if (ent == null) break;
+                          final updated = await showDialog<Dream>(
+                            context: context,
+                            builder: (_) => _EditDreamDialog(initial: ent),
+                          );
+                          if (updated != null) {
+                            await repo.put(updated);
+                          }
+                        } else if (node.level == 1) {
+                          final repo = ref.read(termRepoProvider);
+                          final ent = await repo.getById(node.id);
+                          if (ent == null) break;
+                          final allTags = ref.read(tagsProvider).value ??
+                              await ref.read(tagRepoProvider).watchAll().first;
+                          final initialTags = await repo.loadTags(ent);
+                          final updated = await showDialog<_TermEditResult>(
+                            context: context,
+                            builder: (_) => _EditTermDialog(
+                                initial: ent,
+                                allTags: allTags,
+                                initialTags: initialTags),
+                          );
+                          if (updated != null) {
+                            await repo.updateTerm(updated.item, updated.tags);
+                          }
                         }
-                      } else if (node.level == 1) {
-                        final repo = ref.read(longTermRepoProvider);
-                        final ent = await repo.getById(node.id);
-                        if (ent == null) break;
-                        final allTags = ref.read(tagsProvider).value ??
+                        break;
+                      case 'open_tasks':
+                        if (node.type == 'short') {
+                          await showModalBottomSheet(
+                            context: context,
+                            useSafeArea: true,
+                            isScrollControlled: true,
+                            builder: (context) => TermDetailSheet(
+                                termId: node.id, title: node.title),
+                          );
+                        }
+                        break;
+                      case 'edit_tags':
+                        final allTags =
                             await ref.read(tagRepoProvider).watchAll().first;
-                        await ent.tags.load();
-                        final updated = await showDialog<_LongTermEditResult>(
+                        final current = await ref
+                            .read(termRepoProvider)
+                            .watchWithTags(node.id)
+                            .first;
+                        final picked = await showDialog<List<Tag>>(
                           context: context,
-                          builder: (_) => _EditLongTermDialog(initial: ent, allTags: allTags, initialTags: ent.tags.toList()),
+                          builder: (context) => _TagPickerDialog(
+                            allTags: allTags,
+                            initial: current?.tags ?? const <Tag>[],
+                          ),
                         );
-                        if (updated != null) {
-                          // Persist fields + tags in one go via setTags
-                          await repo.setTags(updated.item, updated.tags);
+                        if (picked != null) {
+                          await ref
+                              .read(termRepoProvider)
+                              .setTagsById(node.id, picked);
                         }
-                      }
-                      break;
-                    case 'open_tasks':
-                      if (node.type == 'short') {
-                        await showModalBottomSheet(
-                          context: context,
-                          useSafeArea: true,
-                          isScrollControlled: true,
-                          builder: (context) => TermDetailSheet(goalId: node.id, title: node.title),
-                        );
-                      }
-                      break;
-                    case 'edit_tags':
-                      final allTags = await ref.read(tagRepoProvider).watchAll().first;
-                      final current = await ref.read(termRepoProvider).watchWithTags(node.id).first;
-                      final picked = await showDialog<List<Tag>>(
-                        context: context,
-                        builder: (context) => _TagPickerDialog(
-                          allTags: allTags,
-                          initial: current?.tags ?? const <Tag>[],
-                        ),
-                      );
-                      if (picked != null) {
-                        await ref.read(termRepoProvider).setTagsById(node.id, picked);
-                      }
-                      break;
-                  }
-                },
-                itemBuilder: (context) {
-                  final items = <PopupMenuEntry<String>>[];
-                  // Remove ShortTerm creation path from Maps: only allow child for Dream
-                  if (node.level == 0) {
-                    items.add(const PopupMenuItem(value: 'add_child', child: Text('子を追加')));
-                  }
-                  if (node.level == 0 || node.level == 1) {
-                    items.add(const PopupMenuItem(value: 'edit', child: Text('編集')));
-                  }
-                  if (node.level == 2) {
-                    items.add(const PopupMenuItem(value: 'open_tasks', child: Text('タスクを管理')));
-                  }
-                  return items;
-                },
-              ),
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) {
+                    final items = <PopupMenuEntry<String>>[];
+                    // Only allow creating a child term under a Dream
+                    if (node.level == 0) {
+                      items.add(const PopupMenuItem(
+                          value: 'add_child', child: Text('子を追加')));
+                    }
+                    if (node.level == 0 || node.level == 1) {
+                      items.add(const PopupMenuItem(
+                          value: 'edit', child: Text('編集')));
+                    }
+                    if (node.level == 2) {
+                      items.add(const PopupMenuItem(
+                          value: 'open_tasks', child: Text('タスクを管理')));
+                    }
+                    return items;
+                  },
+                ),
             ],
           ),
         ),
@@ -584,7 +640,9 @@ class _TaskNodeContent extends StatelessWidget {
       children: [
         Icon(
           node.done == true ? Icons.check_circle : Icons.radio_button_unchecked,
-          color: node.done == true ? Colors.green : Theme.of(context).disabledColor,
+          color: node.done == true
+              ? Colors.green
+              : Theme.of(context).disabledColor,
           size: 18,
         ),
         const SizedBox(width: 8),
@@ -602,16 +660,26 @@ class _TaskNodeContent extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Container(width: 8, height: 8, decoration: BoxDecoration(color: _priorityColor(node.priority), shape: BoxShape.circle)),
+                  Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                          color: _priorityColor(node.priority),
+                          shape: BoxShape.circle)),
                   const SizedBox(width: 6),
                   if (node.dueAt != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withOpacity(0.2)),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text('${node.dueAt!.month}/${node.dueAt!.day}', style: Theme.of(context).textTheme.bodySmall),
+                      child: Text('${node.dueAt!.month}/${node.dueAt!.day}',
+                          style: Theme.of(context).textTheme.bodySmall),
                     ),
                 ],
               ),
@@ -624,7 +692,8 @@ class _TaskNodeContent extends StatelessWidget {
 }
 
 class _TaskCluster {
-  _TaskCluster({required this.longId, required this.centerX, required this.tasks});
+  _TaskCluster(
+      {required this.longId, required this.centerX, required this.tasks});
   final int longId;
   final double centerX;
   final List<Task> tasks;
@@ -688,19 +757,26 @@ class _EditDreamDialogState extends State<_EditDreamDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              TextField(
+                  controller: _title,
+                  decoration: const InputDecoration(labelText: 'タイトル'),
+                  autofocus: true),
               // 夢には優先度・期限は不要のため、編集項目から除外
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
             final d = Dream(
               id: widget.initial.id,
-              title: _title.text.trim().isEmpty ? widget.initial.title : _title.text.trim(),
+              title: _title.text.trim().isEmpty
+                  ? widget.initial.title
+                  : _title.text.trim(),
               // Keep existing values for non-editable fields
               priority: widget.initial.priority,
               dueAt: widget.initial.dueAt,
@@ -718,17 +794,20 @@ class _EditDreamDialogState extends State<_EditDreamDialog> {
   }
 }
 
-class _EditLongTermDialog extends StatefulWidget {
-  const _EditLongTermDialog({required this.initial, required this.allTags, required this.initialTags});
-  final LongTerm initial;
+class _EditTermDialog extends StatefulWidget {
+  const _EditTermDialog(
+      {required this.initial,
+      required this.allTags,
+      required this.initialTags});
+  final Term initial;
   final List<Tag> allTags;
   final List<Tag> initialTags;
 
   @override
-  State<_EditLongTermDialog> createState() => _EditLongTermDialogState();
+  State<_EditTermDialog> createState() => _EditTermDialogState();
 }
 
-class _EditLongTermDialogState extends State<_EditLongTermDialog> {
+class _EditTermDialogState extends State<_EditTermDialog> {
   late TextEditingController _title;
   late int _priority;
   DateTime? _dueAt;
@@ -770,7 +849,10 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              TextField(
+                  controller: _title,
+                  decoration: const InputDecoration(labelText: 'タイトル'),
+                  autofocus: true),
               const SizedBox(height: 12),
               const Text('タグ'),
               const SizedBox(height: 8),
@@ -802,9 +884,20 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
               Wrap(
                 spacing: 8,
                 children: [
-                  ChoiceChip(label: const Text('なし'), selected: _dueAt == null, onSelected: (_) => setState(() => _dueAt = null)),
-                  ChoiceChip(label: const Text('今日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now())),
-                  ChoiceChip(label: const Text('明日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now().add(const Duration(days: 1)))),
+                  ChoiceChip(
+                      label: const Text('なし'),
+                      selected: _dueAt == null,
+                      onSelected: (_) => setState(() => _dueAt = null)),
+                  ChoiceChip(
+                      label: const Text('今日'),
+                      selected: false,
+                      onSelected: (_) =>
+                          setState(() => _dueAt = DateTime.now())),
+                  ChoiceChip(
+                      label: const Text('明日'),
+                      selected: false,
+                      onSelected: (_) => setState(() => _dueAt =
+                          DateTime.now().add(const Duration(days: 1)))),
                   ActionChip(label: const Text('日付指定'), onPressed: pickDate),
                 ],
               ),
@@ -814,10 +907,22 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
               Wrap(
                 spacing: 8,
                 children: [
-                  ChoiceChip(label: const Text('低'), selected: _priority == 0, onSelected: (_) => setState(() => _priority = 0)),
-                  ChoiceChip(label: const Text('中'), selected: _priority == 1, onSelected: (_) => setState(() => _priority = 1)),
-                  ChoiceChip(label: const Text('高'), selected: _priority == 2, onSelected: (_) => setState(() => _priority = 2)),
-                  ChoiceChip(label: const Text('最優先'), selected: _priority == 3, onSelected: (_) => setState(() => _priority = 3)),
+                  ChoiceChip(
+                      label: const Text('低'),
+                      selected: _priority == 0,
+                      onSelected: (_) => setState(() => _priority = 0)),
+                  ChoiceChip(
+                      label: const Text('中'),
+                      selected: _priority == 1,
+                      onSelected: (_) => setState(() => _priority = 1)),
+                  ChoiceChip(
+                      label: const Text('高'),
+                      selected: _priority == 2,
+                      onSelected: (_) => setState(() => _priority = 2)),
+                  ChoiceChip(
+                      label: const Text('最優先'),
+                      selected: _priority == 3,
+                      onSelected: (_) => setState(() => _priority = 3)),
                 ],
               ),
             ],
@@ -825,21 +930,28 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
-            final updated = LongTerm(
+            final updated = Term(
               id: widget.initial.id,
-              title: _title.text.trim().isEmpty ? widget.initial.title : _title.text.trim(),
+              title: _title.text.trim().isEmpty
+                  ? widget.initial.title
+                  : _title.text.trim(),
+              parentId: widget.initial.parentId,
               dreamId: widget.initial.dreamId,
               priority: _priority,
               dueAt: _dueAt,
               archived: widget.initial.archived,
-            )
-              ..createdAt = widget.initial.createdAt
-              ..updatedAt = DateTime.now();
-            final selectedTags = widget.allTags.where((t) => _selectedTagIds.contains(t.id)).toList();
-            Navigator.pop(context, _LongTermEditResult(item: updated, tags: selectedTags));
+              color: widget.initial.color,
+            );
+            final selectedTags = widget.allTags
+                .where((t) => _selectedTagIds.contains(t.id))
+                .toList();
+            Navigator.pop(
+                context, _TermEditResult(item: updated, tags: selectedTags));
           },
           child: const Text('保存'),
         )
@@ -848,15 +960,15 @@ class _EditLongTermDialogState extends State<_EditLongTermDialog> {
   }
 }
 
-class _CreateLongTermDialog extends StatefulWidget {
-  const _CreateLongTermDialog({required this.allTags});
+class _CreateTermDialog extends StatefulWidget {
+  const _CreateTermDialog({required this.allTags});
   final List<Tag> allTags;
 
   @override
-  State<_CreateLongTermDialog> createState() => _CreateLongTermDialogState();
+  State<_CreateTermDialog> createState() => _CreateTermDialogState();
 }
 
-class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
+class _CreateTermDialogState extends State<_CreateTermDialog> {
   final TextEditingController _title = TextEditingController();
   final Set<int> _selectedTagIds = {};
   int _priority = 1;
@@ -889,7 +1001,10 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: _title, decoration: const InputDecoration(labelText: 'タイトル'), autofocus: true),
+              TextField(
+                  controller: _title,
+                  decoration: const InputDecoration(labelText: 'タイトル'),
+                  autofocus: true),
               const SizedBox(height: 12),
               const Text('タグ'),
               const SizedBox(height: 8),
@@ -921,9 +1036,20 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
               Wrap(
                 spacing: 8,
                 children: [
-                  ChoiceChip(label: const Text('なし'), selected: _dueAt == null, onSelected: (_) => setState(() => _dueAt = null)),
-                  ChoiceChip(label: const Text('今日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now())),
-                  ChoiceChip(label: const Text('明日'), selected: false, onSelected: (_) => setState(() => _dueAt = DateTime.now().add(const Duration(days: 1)))),
+                  ChoiceChip(
+                      label: const Text('なし'),
+                      selected: _dueAt == null,
+                      onSelected: (_) => setState(() => _dueAt = null)),
+                  ChoiceChip(
+                      label: const Text('今日'),
+                      selected: false,
+                      onSelected: (_) =>
+                          setState(() => _dueAt = DateTime.now())),
+                  ChoiceChip(
+                      label: const Text('明日'),
+                      selected: false,
+                      onSelected: (_) => setState(() => _dueAt =
+                          DateTime.now().add(const Duration(days: 1)))),
                   ActionChip(label: const Text('日付指定'), onPressed: pickDate),
                 ],
               ),
@@ -933,10 +1059,22 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
               Wrap(
                 spacing: 8,
                 children: [
-                  ChoiceChip(label: const Text('低'), selected: _priority == 0, onSelected: (_) => setState(() => _priority = 0)),
-                  ChoiceChip(label: const Text('中'), selected: _priority == 1, onSelected: (_) => setState(() => _priority = 1)),
-                  ChoiceChip(label: const Text('高'), selected: _priority == 2, onSelected: (_) => setState(() => _priority = 2)),
-                  ChoiceChip(label: const Text('最優先'), selected: _priority == 3, onSelected: (_) => setState(() => _priority = 3)),
+                  ChoiceChip(
+                      label: const Text('低'),
+                      selected: _priority == 0,
+                      onSelected: (_) => setState(() => _priority = 0)),
+                  ChoiceChip(
+                      label: const Text('中'),
+                      selected: _priority == 1,
+                      onSelected: (_) => setState(() => _priority = 1)),
+                  ChoiceChip(
+                      label: const Text('高'),
+                      selected: _priority == 2,
+                      onSelected: (_) => setState(() => _priority = 2)),
+                  ChoiceChip(
+                      label: const Text('最優先'),
+                      selected: _priority == 3,
+                      onSelected: (_) => setState(() => _priority = 3)),
                 ],
               ),
             ],
@@ -944,7 +1082,9 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
             final t = _title.text.trim();
@@ -952,8 +1092,13 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
               Navigator.pop(context);
               return;
             }
-            final tags = widget.allTags.where((e) => _selectedTagIds.contains(e.id)).toList();
-            Navigator.pop(context, _LongTermCreateResult(title: t, tags: tags, priority: _priority, dueAt: _dueAt));
+            final tags = widget.allTags
+                .where((e) => _selectedTagIds.contains(e.id))
+                .toList();
+            Navigator.pop(
+                context,
+                _TermCreateResult(
+                    title: t, tags: tags, priority: _priority, dueAt: _dueAt));
           },
           child: const Text('作成'),
         ),
@@ -962,21 +1107,23 @@ class _CreateLongTermDialogState extends State<_CreateLongTermDialog> {
   }
 }
 
-
-class _LongTermEditResult {
-  _LongTermEditResult({required this.item, required this.tags});
-  final LongTerm item;
+class _TermEditResult {
+  _TermEditResult({required this.item, required this.tags});
+  final Term item;
   final List<Tag> tags;
 }
 
-class _LongTermCreateResult {
-  _LongTermCreateResult({required this.title, required this.tags, required this.priority, required this.dueAt});
+class _TermCreateResult {
+  _TermCreateResult(
+      {required this.title,
+      required this.tags,
+      required this.priority,
+      required this.dueAt});
   final String title;
   final List<Tag> tags;
   final int priority;
   final DateTime? dueAt;
 }
-
 
 class _TagPickerDialogState extends State<_TagPickerDialog> {
   late Set<int> _selectedIds;
@@ -1010,16 +1157,21 @@ class _TagPickerDialogState extends State<_TagPickerDialog> {
                             });
                           },
                           title: Text(t.name),
-                          secondary: CircleAvatar(backgroundColor: Color(t.color)),
+                          secondary:
+                              CircleAvatar(backgroundColor: Color(t.color)),
                         ))
                     .toList(),
               ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
-            final result = widget.allTags.where((t) => _selectedIds.contains(t.id)).toList();
+            final result = widget.allTags
+                .where((t) => _selectedIds.contains(t.id))
+                .toList();
             Navigator.pop(context, result);
           },
           child: const Text('保存'),
@@ -1029,8 +1181,8 @@ class _TagPickerDialogState extends State<_TagPickerDialog> {
   }
 }
 
-class _GoalNodeContent extends ConsumerWidget {
-  const _GoalNodeContent({required this.node});
+class _TermNodeContent extends ConsumerWidget {
+  const _TermNodeContent({required this.node});
   final _Node node;
 
   @override
@@ -1056,12 +1208,15 @@ class _GoalNodeContent extends ConsumerWidget {
               runSpacing: -6,
               children: tags
                   .map((t) => Chip(
-                        label: Text('#${t.name}', style: Theme.of(context).textTheme.bodySmall),
+                        label: Text('#${t.name}',
+                            style: Theme.of(context).textTheme.bodySmall),
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 0),
                         backgroundColor: Color(t.color).withOpacity(0.15),
-                        side: BorderSide(color: Color(t.color).withOpacity(0.35)),
+                        side:
+                            BorderSide(color: Color(t.color).withOpacity(0.35)),
                       ))
                   .toList(),
             ),
@@ -1084,8 +1239,12 @@ Future<String?> _askTitle(BuildContext context, String title) async {
         onSubmitted: (_) => Navigator.of(context).pop(controller.text.trim()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('追加')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
+        FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('追加')),
       ],
     ),
   );
