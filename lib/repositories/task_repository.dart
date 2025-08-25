@@ -60,10 +60,10 @@ class TaskRepository {
   }
 
   // Watch tasks linked to a specific Term
-  Stream<List<Task>> watchByGoal(int goalId) {
+  Stream<List<Task>> watchByTerm(int termId) {
     return _isar.tasks
         .filter()
-        .shortTermIdEqualTo(goalId)
+        .shortTermIdEqualTo(termId)
         .sortByCreatedAt()
         .watch(fireImmediately: true)
         .asBroadcastStream();

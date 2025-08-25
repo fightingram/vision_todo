@@ -9,15 +9,16 @@ import '../../providers/term_providers.dart';
 import '../widgets/task_tile.dart';
 
 class TermTodoPage extends ConsumerWidget {
-  const TermTodoPage({super.key, required this.goalId, required this.goalTitle});
-  final int goalId;
-  final String goalTitle;
+  const TermTodoPage(
+      {super.key, required this.termId, required this.termTitle});
+  final int termId;
+  final String termTitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(taskRepoProvider);
-    final goalWithTags = ref.watch(termWithTagsProvider(goalId));
-    final shortsAsync = ref.watch(termsByParentProvider(goalId));
+    final termWithTags = ref.watch(termWithTagsProvider(termId));
+    final shortsAsync = ref.watch(termsByParentProvider(termId));
 
     String priorityLabel(int p) {
       switch (p) {
@@ -52,7 +53,7 @@ class TermTodoPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(goalWithTags.asData?.value?.item.title ?? goalTitle),
+        title: Text(termWithTags.asData?.value?.item.title ?? termTitle),
         actions: [
           IconButton(
             tooltip: 'TODOを追加',
@@ -65,13 +66,13 @@ class TermTodoPage extends ConsumerWidget {
               int? targetId;
               if (shorts.isEmpty) {
                 // 子Termがない場合は、このTerm直下に作成
-                targetId = goalId;
+                targetId = termId;
               } else {
                 // このTerm直下 も選択肢に含めて選ばせる
                 targetId = await _pickTargetTerm(
                   context,
-                  currentTermId: goalId,
-                  currentTermTitle: goalTitle,
+                  currentTermId: termId,
+                  currentTermTitle: termTitle,
                   children: shorts,
                 );
               }
@@ -81,7 +82,7 @@ class TermTodoPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: goalWithTags.when(
+      body: termWithTags.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('読み込みエラー: $e')),
         data: (gwt) {
@@ -92,7 +93,7 @@ class TermTodoPage extends ConsumerWidget {
           final tags = gwt.tags;
           return Column(
             children: [
-              // Header: goal details
+              // Header: term details
               Card(
                 margin: const EdgeInsets.all(12),
                 child: Padding(
@@ -108,16 +109,23 @@ class TermTodoPage extends ConsumerWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: priorityColor(item.priority, context).withOpacity(0.1),
+                              color: priorityColor(item.priority, context)
+                                  .withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: priorityColor(item.priority, context).withOpacity(0.3)),
+                              border: Border.all(
+                                  color: priorityColor(item.priority, context)
+                                      .withOpacity(0.3)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.flag, size: 16, color: priorityColor(item.priority, context)),
+                                Icon(Icons.flag,
+                                    size: 16,
+                                    color:
+                                        priorityColor(item.priority, context)),
                                 const SizedBox(width: 6),
                                 Text('優先度: ${priorityLabel(item.priority)}'),
                               ],
@@ -125,10 +133,14 @@ class TermTodoPage extends ConsumerWidget {
                           ),
                           const SizedBox(width: 12),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                              border: Border.all(
+                                  color: Theme.of(context)
+                                      .dividerColor
+                                      .withOpacity(0.5)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -156,7 +168,8 @@ class TermTodoPage extends ConsumerWidget {
                               .toList(),
                         ),
                       ] else ...[
-                        Text('タグ: なし', style: Theme.of(context).textTheme.bodySmall),
+                        Text('タグ: なし',
+                            style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ],
                   ),
@@ -164,14 +177,19 @@ class TermTodoPage extends ConsumerWidget {
               ),
               Expanded(
                 child: shortsAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('読み込みエラー: $e')),
                   data: (shorts) {
                     // このTerm直下と子Term直下の両方を表示対象にする
-                    final shortIds = shorts.map((s) => s.id).toSet()..add(goalId);
-                    final tasks = ref.watch(tasksStreamProvider).value ?? const <Task>[];
+                    final shortIds = shorts.map((s) => s.id).toSet()
+                      ..add(termId);
+                    final tasks =
+                        ref.watch(tasksStreamProvider).value ?? const <Task>[];
                     final items = tasks
-                        .where((t) => t.shortTermId != null && shortIds.contains(t.shortTermId))
+                        .where((t) =>
+                            t.shortTermId != null &&
+                            shortIds.contains(t.shortTermId))
                         .toList();
                     if (items.isEmpty) {
                       return const Center(child: Text('TODOはありません'));
@@ -179,7 +197,8 @@ class TermTodoPage extends ConsumerWidget {
                     return ListView.builder(
                       itemCount: items.length,
                       itemBuilder: (context, i) => Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         child: TaskTile(task: items[i]),
                       ),
                     );
@@ -207,14 +226,21 @@ Future<String?> _askTitle(BuildContext context, String title) async {
         onSubmitted: (_) => Navigator.of(context).pop(controller.text.trim()),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('追加')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
+        FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('追加')),
       ],
     ),
   );
 }
 
-Future<int?> _pickTargetTerm(BuildContext context, {required int currentTermId, required String currentTermTitle, required List<Term> children}) async {
+Future<int?> _pickTargetTerm(BuildContext context,
+    {required int currentTermId,
+    required String currentTermTitle,
+    required List<Term> children}) async {
   int? selectedId = currentTermId;
   return showDialog<int>(
     context: context,
@@ -242,7 +268,9 @@ Future<int?> _pickTargetTerm(BuildContext context, {required int currentTermId, 
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(
           onPressed: () {
             Navigator.pop(context, selectedId);

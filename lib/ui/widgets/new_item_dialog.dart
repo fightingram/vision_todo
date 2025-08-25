@@ -16,7 +16,7 @@ class NewItemDialog extends ConsumerStatefulWidget {
   ConsumerState<NewItemDialog> createState() => _NewItemDialogState();
 }
 
-enum _ItemType { dream, goal, task }
+enum _ItemType { dream, term, task }
 
 class _NewItemDialogState extends ConsumerState<NewItemDialog> {
   _ItemType type = _ItemType.task;
@@ -24,7 +24,7 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
   int priority = 1;
   DateTime? dueAt;
   int? dreamId;
-  int? longId;
+  int? termId;
 
   @override
   void dispose() {
@@ -35,9 +35,9 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
   @override
   Widget build(BuildContext context) {
     final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
-    final goals = ref.watch(allTopTermsProvider).value ?? const <Term>[];
+    final terms = ref.watch(allTopTermsProvider).value ?? const <Term>[];
 
-    final filteredGoals = goals;
+    final filteredTerms = terms;
 
     Future<void> pickDate() async {
       final picked = await showDatePicker(
@@ -54,14 +54,14 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
       if (t.isEmpty) return;
       if (type == _ItemType.dream) {
         await ref.read(dreamRepoProvider).put(Dream(title: t));
-      } else if (type == _ItemType.goal) {
+      } else if (type == _ItemType.term) {
         if (dreamId == null) return;
-        await ref
-            .read(termRepoProvider)
-            .addTerm(title: t, dreamId: dreamId!, priority: priority, dueAt: dueAt);
+        await ref.read(termRepoProvider).addTerm(
+            title: t, dreamId: dreamId!, priority: priority, dueAt: dueAt);
       } else {
         final repo = ref.read(taskRepoProvider);
-        await repo.add(Task(title: t, priority: priority, dueAt: dueAt, shortTermId: longId));
+        await repo.add(Task(
+            title: t, priority: priority, dueAt: dueAt, shortTermId: termId));
       }
       if (context.mounted) Navigator.pop(context);
     }
@@ -79,7 +79,7 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
             value: type,
             items: const [
               DropdownMenuItem(value: _ItemType.dream, child: Text('夢')),
-              DropdownMenuItem(value: _ItemType.goal, child: Text('Term')),
+              DropdownMenuItem(value: _ItemType.term, child: Text('Term')),
               DropdownMenuItem(value: _ItemType.task, child: Text('TODO')),
             ],
             onChanged: (v) => setState(() => type = v ?? _ItemType.task),
@@ -91,13 +91,14 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
             autofocus: true,
           ),
           const SizedBox(height: 12),
-          if (type == _ItemType.goal) ...[
+          if (type == _ItemType.term) ...[
             DropdownButtonFormField<int?>(
               value: dreamId,
               decoration: const InputDecoration(labelText: '夢 (親)'),
               items: [
                 const DropdownMenuItem(value: null, child: Text('未選択')),
-                ...dreams.map((d) => DropdownMenuItem(value: d.id, child: Text(d.title))),
+                ...dreams.map(
+                    (d) => DropdownMenuItem(value: d.id, child: Text(d.title))),
               ],
               onChanged: (v) => setState(() {
                 dreamId = v;
@@ -107,13 +108,14 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
           if (type == _ItemType.task) ...[
             const SizedBox(height: 8),
             DropdownButtonFormField<int?>(
-              value: longId,
+              value: termId,
               decoration: const InputDecoration(labelText: 'Term (親, 任意)'),
               items: [
                 const DropdownMenuItem(value: null, child: Text('未選択')),
-                ...filteredGoals.map((g) => DropdownMenuItem(value: g.id, child: Text(g.title))),
+                ...filteredTerms.map(
+                    (g) => DropdownMenuItem(value: g.id, child: Text(g.title))),
               ],
-              onChanged: (v) => setState(() => longId = v),
+              onChanged: (v) => setState(() => termId = v),
             ),
           ],
           if (type != _ItemType.dream) ...[
@@ -162,8 +164,8 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
                 ChoiceChip(
                   label: const Text('明日'),
                   selected: false,
-                  onSelected: (_) =>
-                      setState(() => dueAt = DateTime.now().add(const Duration(days: 1))),
+                  onSelected: (_) => setState(() =>
+                      dueAt = DateTime.now().add(const Duration(days: 1))),
                 ),
                 ChoiceChip(
                   label: const Text('週末'),
@@ -172,7 +174,8 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
                     final now = DateTime.now();
                     final toAdd = 6 - now.weekday; // Saturday
                     setState(() => dueAt =
-                        DateTime(now.year, now.month, now.day).add(Duration(days: toAdd.clamp(0, 6))));
+                        DateTime(now.year, now.month, now.day)
+                            .add(Duration(days: toAdd.clamp(0, 6))));
                   },
                 ),
                 ChoiceChip(
@@ -180,8 +183,8 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
                   selected: false,
                   onSelected: (_) {
                     final now = DateTime.now();
-                    final nextWeek =
-                        DateTime(now.year, now.month, now.day).add(Duration(days: 7 - (now.weekday - 1)));
+                    final nextWeek = DateTime(now.year, now.month, now.day)
+                        .add(Duration(days: 7 - (now.weekday - 1)));
                     setState(() => dueAt = nextWeek);
                   },
                 ),
@@ -192,7 +195,9 @@ class _NewItemDialogState extends ConsumerState<NewItemDialog> {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('キャンセル')),
         FilledButton(onPressed: onSubmit, child: const Text('作成')),
       ],
     );

@@ -37,8 +37,8 @@ final termsByDreamProvider =
 });
 
 final termsByParentProvider =
-    StreamProvider.autoDispose.family<List<Term>, int>((ref, parentGoalId) {
-  return ref.read(termRepoProvider).watchChildren(parentGoalId);
+    StreamProvider.autoDispose.family<List<Term>, int>((ref, parentId) {
+  return ref.read(termRepoProvider).watchChildren(parentId);
 });
 
 // Unified: all top-level terms

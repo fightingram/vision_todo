@@ -38,7 +38,8 @@ class _TodoTree extends ConsumerStatefulWidget {
   ConsumerState<_TodoTree> createState() => _TodoTreeState();
 }
 
-class _TodoTreeState extends ConsumerState<_TodoTree> with TickerProviderStateMixin {
+class _TodoTreeState extends ConsumerState<_TodoTree>
+    with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
@@ -46,11 +47,13 @@ class _TodoTreeState extends ConsumerState<_TodoTree> with TickerProviderStateMi
 
     final dreamTabs = [
       const Tab(icon: Icon(Icons.bedtime_outlined), text: '夢: すべて'),
-      ...dreams.map((d) => Tab(icon: const Icon(Icons.bedtime_outlined), text: d.title)),
+      ...dreams.map(
+          (d) => Tab(icon: const Icon(Icons.bedtime_outlined), text: d.title)),
     ];
     final tagTabs = [
       const Tab(icon: Icon(Icons.label_outline), text: 'タグ: すべて'),
-      ...tags.map((t) => Tab(icon: const Icon(Icons.label_outline), text: t.name)),
+      ...tags
+          .map((t) => Tab(icon: const Icon(Icons.label_outline), text: t.name)),
     ];
 
     return Theme(
@@ -64,7 +67,8 @@ class _TodoTreeState extends ConsumerState<_TodoTree> with TickerProviderStateMi
               animation: dreamCtrl,
               builder: (context, _) {
                 final dreamIndex = dreamCtrl.index;
-                final selectedDreamId = dreamIndex == 0 ? null : dreams[dreamIndex - 1].id;
+                final selectedDreamId =
+                    dreamIndex == 0 ? null : dreams[dreamIndex - 1].id;
                 return Column(
                   children: [
                     Material(
@@ -72,7 +76,8 @@ class _TodoTreeState extends ConsumerState<_TodoTree> with TickerProviderStateMi
                       child: TabBar(
                         isScrollable: true,
                         tabs: dreamTabs,
-                        labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        labelPadding:
+                            const EdgeInsets.symmetric(horizontal: 16),
                       ),
                     ),
                     Expanded(
@@ -85,15 +90,20 @@ class _TodoTreeState extends ConsumerState<_TodoTree> with TickerProviderStateMi
                               animation: tagCtrl,
                               builder: (context, __) {
                                 final tagIndex = tagCtrl.index;
-                                final selectedTagId = tagIndex == 0 ? null : tags[tagIndex - 1].id;
+                                final selectedTagId = tagIndex == 0
+                                    ? null
+                                    : tags[tagIndex - 1].id;
                                 return Column(
                                   children: [
                                     Material(
-                                      color: Theme.of(context).colorScheme.surface,
+                                      color:
+                                          Theme.of(context).colorScheme.surface,
                                       child: TabBar(
                                         isScrollable: true,
                                         tabs: tagTabs,
-                                        labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                        labelPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12),
                                       ),
                                     ),
                                     Expanded(
@@ -154,7 +164,8 @@ class _FilteredTodosView extends ConsumerWidget {
 }
 
 class _LongFilteredSection extends ConsumerWidget {
-  const _LongFilteredSection({required this.item, required this.tagId, required this.allTasks});
+  const _LongFilteredSection(
+      {required this.item, required this.tagId, required this.allTasks});
   final Term item;
   final int? tagId;
   final List<Task> allTasks;
@@ -166,12 +177,14 @@ class _LongFilteredSection extends ConsumerWidget {
       future: ref.read(termRepoProvider).loadTags(item),
       builder: (context, snap) {
         final tags = snap.data ?? const <Tag>[];
-        final goalHasTag = tagId == null ? true : tags.any((t) => t.id == tagId);
-        if (!goalHasTag && tagId != null) {
+        final termHasTag =
+            tagId == null ? true : tags.any((t) => t.id == tagId);
+        if (!termHasTag && tagId != null) {
           return const SizedBox.shrink();
         }
 
-        final filteredTasks = allTasks.where((t) => t.shortTermId == item.id).toList();
+        final filteredTasks =
+            allTasks.where((t) => t.shortTermId == item.id).toList();
 
         return Card(
           child: ExpansionTile(
@@ -181,7 +194,8 @@ class _LongFilteredSection extends ConsumerWidget {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => TermTodoPage(goalId: item.id, goalTitle: item.title),
+                    builder: (_) =>
+                        TermTodoPage(termId: item.id, termTitle: item.title),
                   ),
                 );
               },
@@ -189,9 +203,10 @@ class _LongFilteredSection extends ConsumerWidget {
             ),
             subtitle: Text('TODO ${filteredTasks.length} 件'),
             children: [
-          // Term actions row
+              // Term actions row
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
                 child: Row(
                   children: [
                     OutlinedButton.icon(
@@ -200,7 +215,9 @@ class _LongFilteredSection extends ConsumerWidget {
                       onPressed: item.archived
                           ? null
                           : () async {
-                              await ref.read(termRepoProvider).archiveTerm(item, archived: true);
+                              await ref
+                                  .read(termRepoProvider)
+                                  .archiveTerm(item, archived: true);
                             },
                     ),
                   ],
@@ -214,7 +231,8 @@ class _LongFilteredSection extends ConsumerWidget {
               else
                 ...filteredTasks
                     .map<Widget>((t) => Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
                           child: TaskTile(task: t),
                         ))
                     .toList(),
@@ -273,7 +291,8 @@ class _LongNode extends ConsumerWidget {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                    builder: (_) => TermTodoPage(goalId: item.id, goalTitle: item.title),
+                  builder: (_) =>
+                      TermTodoPage(termId: item.id, termTitle: item.title),
                 ),
               );
             },
@@ -293,7 +312,11 @@ class _LongNode extends ConsumerWidget {
               data: (shorts) {
                 final shortIds = shorts.map((s) => s.id).toSet();
                 final tasks = tasksAsync.value ?? const <Task>[];
-                final filtered = tasks.where((t) => t.shortTermId != null && shortIds.contains(t.shortTermId)).toList();
+                final filtered = tasks
+                    .where((t) =>
+                        t.shortTermId != null &&
+                        shortIds.contains(t.shortTermId))
+                    .toList();
                 if (filtered.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(12.0),
@@ -303,7 +326,8 @@ class _LongNode extends ConsumerWidget {
                 return Column(
                   children: filtered
                       .map<Widget>((t) => Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
                             child: TaskTile(task: t),
                           ))
                       .toList(),
@@ -316,5 +340,3 @@ class _LongNode extends ConsumerWidget {
     );
   }
 }
-
- 
