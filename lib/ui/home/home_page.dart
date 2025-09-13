@@ -4,15 +4,28 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
+import '../../utils/date_utils.dart' as du;
 import '../widgets/character_band.dart';
 import '../widgets/new_item_dialog.dart';
 import '../widgets/task_tile.dart';
 
-class HomePage extends ConsumerWidget {
+
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  @override
+  void initState() {
+    super.initState();
+    // 起動時の仕分け表示はApp側で行うため、Homeではトリガーしない
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final init = ref.watch(isarInitProvider);
     final settings = ref.watch(settingsProvider);
     return Scaffold(
@@ -42,7 +55,20 @@ class HomePage extends ConsumerWidget {
         data: (_) => LayoutBuilder(
           builder: (context, constraints) {
             final bandHeight = constraints.maxHeight * 0.20;
-            final sectioned = ref.watch(sectionedTasksProvider);
+            final tasks = ref.watch(tasksStreamProvider).value ?? const [];
+            final weekStart = du.startOfWeek(DateTime.now(), settings.weekStart);
+            final thisWeek = tasks
+                .where((t) => t.plannedWeekStart != null && du.isSameDate(t.plannedWeekStart!, weekStart))
+                .toList()
+              ..sort((a, b) {
+                final byPriority = b.priority.compareTo(a.priority);
+                if (byPriority != 0) return byPriority;
+                final ad = a.dueAt ?? DateTime.fromMillisecondsSinceEpoch(8640000000000000);
+                final bd = b.dueAt ?? DateTime.fromMillisecondsSinceEpoch(8640000000000000);
+                final byDue = ad.compareTo(bd);
+                if (byDue != 0) return byDue;
+                return a.createdAt.compareTo(b.createdAt);
+              });
             return Column(
               children: [
                 SizedBox(height: bandHeight, child: const CharacterBand()),
@@ -50,10 +76,7 @@ class HomePage extends ConsumerWidget {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     children: [
-                      _Section(title: '今日', tasks: sectioned.today),
-                      _Section(title: '明日', tasks: sectioned.tomorrow),
-                      _Section(title: '今週', tasks: sectioned.thisWeek),
-                      _Section(title: '期限なし', tasks: sectioned.none),
+                      _Section(title: '今週', tasks: thisWeek),
                     ],
                   ),
                 ),
@@ -89,7 +112,12 @@ class _Section extends StatelessWidget {
             ),
           )
         else
-          ...tasks.map<Widget>((t) => Card(margin: const EdgeInsets.symmetric(vertical: 4), child: TaskTile(task: t))).toList(),
+          ...tasks
+              .map<Widget>((t) => Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    child: TaskTile(task: t, showCheckbox: false, showEditMenu: false),
+                  ))
+              .toList(),
       ],
     );
   }

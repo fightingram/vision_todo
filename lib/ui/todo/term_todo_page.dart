@@ -106,6 +106,38 @@ class TermTodoPage extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
+                      if (item.dreamId != null)
+                        FutureBuilder(
+                          future: ref.read(dreamRepoProvider).getById(item.dreamId!),
+                          builder: (context, snap) {
+                            final d = snap.data;
+                            if (d == null) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.bedtime_outlined, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text('夢: ${d.title}'),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.emoji_events_outlined),
+                            label: Text(item.archived ? '達成済み' : '達成'),
+                            onPressed: item.archived
+                                ? null
+                                : () async {
+                                    await ref.read(termRepoProvider).archiveTerm(item, archived: true);
+                                  },
+                          ),
+                        ],
+                      ),
                       Row(
                         children: [
                           Container(

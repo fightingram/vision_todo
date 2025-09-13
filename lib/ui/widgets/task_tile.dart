@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
@@ -7,8 +8,15 @@ import '../../models/task.dart';
 import '../../providers/task_providers.dart';
 
 class TaskTile extends ConsumerWidget {
-  const TaskTile({super.key, required this.task});
+  const TaskTile({
+    super.key,
+    required this.task,
+    this.showCheckbox = true,
+    this.showEditMenu = true,
+  });
   final Task task;
+  final bool showCheckbox;
+  final bool showEditMenu;
 
   Color _priorityColor(int p) {
     switch (p) {
@@ -36,20 +44,52 @@ class TaskTile extends ConsumerWidget {
     }
   }
 
+  String _statusLabel(TaskStatus s) {
+    switch (s) {
+      case TaskStatus.todo:
+        return '未着手';
+      case TaskStatus.doing:
+        return '進行中';
+      case TaskStatus.done:
+        return '完了';
+    }
+  }
+
+  Color _statusColor(TaskStatus s, BuildContext context) {
+    switch (s) {
+      case TaskStatus.todo:
+        return Theme.of(context).disabledColor;
+      case TaskStatus.doing:
+        return Colors.blue;
+      case TaskStatus.done:
+        return Colors.green;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(taskRepoProvider);
     return ListTile(
-      leading: Checkbox(
-        value: task.status == TaskStatus.done,
-        onChanged: (_) => repo.toggleDone(task),
-      ),
+      leading: showCheckbox
+          ? Checkbox(
+              value: task.status == TaskStatus.done,
+              onChanged: (_) => repo.toggleDone(task),
+            )
+          : null,
       title: Text(task.title, maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 8,
         runSpacing: 4,
         children: [
+          Chip(
+            label: Text(_statusLabel(task.status)),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+            backgroundColor: _statusColor(task.status, context).withOpacity(0.1),
+            side: BorderSide(color: _statusColor(task.status, context).withOpacity(0.3)),
+          ),
           Container(
             width: 8,
             height: 8,
@@ -70,22 +110,27 @@ class TaskTile extends ConsumerWidget {
             ),
         ],
       ),
-      trailing: PopupMenuButton<String>(
-        onSelected: (v) async {
-          if (v == 'edit') {
-            final updated = await showDialog<Task>(
-              context: context,
-              builder: (_) => _EditTaskDialog(initial: task),
-            );
-            if (updated != null) {
-              await repo.update(updated);
-            }
-          }
-        },
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: 'edit', child: Text('編集')),
-        ],
-      ),
+      trailing: showEditMenu
+          ? PopupMenuButton<String>(
+              onSelected: (v) async {
+                if (v == 'edit') {
+                  final updated = await showDialog<Task>(
+                    context: context,
+                    builder: (_) => _EditTaskDialog(initial: task),
+                  );
+                  if (updated != null) {
+                    await repo.update(updated);
+                  }
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('編集')),
+              ],
+            )
+          : null,
+      onTap: () {
+        context.push('/todo/task/${task.id}', extra: task.title);
+      },
     );
   }
 }

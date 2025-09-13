@@ -37,29 +37,39 @@ const TaskSchema = CollectionSchema(
       name: r'dueAt',
       type: IsarType.dateTime,
     ),
-    r'priority': PropertySchema(
+    r'plannedWeekStart': PropertySchema(
       id: 4,
+      name: r'plannedWeekStart',
+      type: IsarType.dateTime,
+    ),
+    r'priority': PropertySchema(
+      id: 5,
       name: r'priority',
       type: IsarType.long,
     ),
     r'shortTermId': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'shortTermId',
       type: IsarType.long,
     ),
     r'status': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'status',
       type: IsarType.string,
       enumMap: _TaskstatusEnumValueMap,
     ),
     r'title': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'title',
       type: IsarType.string,
     ),
+    r'triagedWeekStart': PropertySchema(
+      id: 9,
+      name: r'triagedWeekStart',
+      type: IsarType.dateTime,
+    ),
     r'updatedAt': PropertySchema(
-      id: 8,
+      id: 10,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -99,11 +109,13 @@ void _taskSerialize(
   writer.writeDateTime(offsets[1], object.createdAt);
   writer.writeDateTime(offsets[2], object.doneAt);
   writer.writeDateTime(offsets[3], object.dueAt);
-  writer.writeLong(offsets[4], object.priority);
-  writer.writeLong(offsets[5], object.shortTermId);
-  writer.writeString(offsets[6], object.status.name);
-  writer.writeString(offsets[7], object.title);
-  writer.writeDateTime(offsets[8], object.updatedAt);
+  writer.writeDateTime(offsets[4], object.plannedWeekStart);
+  writer.writeLong(offsets[5], object.priority);
+  writer.writeLong(offsets[6], object.shortTermId);
+  writer.writeString(offsets[7], object.status.name);
+  writer.writeString(offsets[8], object.title);
+  writer.writeDateTime(offsets[9], object.triagedWeekStart);
+  writer.writeDateTime(offsets[10], object.updatedAt);
 }
 
 Task _taskDeserialize(
@@ -117,14 +129,16 @@ Task _taskDeserialize(
     doneAt: reader.readDateTimeOrNull(offsets[2]),
     dueAt: reader.readDateTimeOrNull(offsets[3]),
     id: id,
-    priority: reader.readLongOrNull(offsets[4]) ?? 1,
-    shortTermId: reader.readLongOrNull(offsets[5]),
-    status: _TaskstatusValueEnumMap[reader.readStringOrNull(offsets[6])] ??
+    plannedWeekStart: reader.readDateTimeOrNull(offsets[4]),
+    priority: reader.readLongOrNull(offsets[5]) ?? 1,
+    shortTermId: reader.readLongOrNull(offsets[6]),
+    status: _TaskstatusValueEnumMap[reader.readStringOrNull(offsets[7])] ??
         TaskStatus.todo,
-    title: reader.readString(offsets[7]),
+    title: reader.readString(offsets[8]),
+    triagedWeekStart: reader.readDateTimeOrNull(offsets[9]),
   );
   object.createdAt = reader.readDateTime(offsets[1]);
-  object.updatedAt = reader.readDateTime(offsets[8]);
+  object.updatedAt = reader.readDateTime(offsets[10]);
   return object;
 }
 
@@ -144,15 +158,19 @@ P _taskDeserializeProp<P>(
     case 3:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 4:
-      return (reader.readLongOrNull(offset) ?? 1) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset) ?? 1) as P;
     case 6:
+      return (reader.readLongOrNull(offset)) as P;
+    case 7:
       return (_TaskstatusValueEnumMap[reader.readStringOrNull(offset)] ??
           TaskStatus.todo) as P;
-    case 7:
-      return (reader.readString(offset)) as P;
     case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 10:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -161,10 +179,12 @@ P _taskDeserializeProp<P>(
 
 const _TaskstatusEnumValueMap = {
   r'todo': r'todo',
+  r'doing': r'doing',
   r'done': r'done',
 };
 const _TaskstatusValueEnumMap = {
   r'todo': TaskStatus.todo,
+  r'doing': TaskStatus.doing,
   r'done': TaskStatus.done,
 };
 
@@ -500,6 +520,75 @@ extension TaskQueryFilter on QueryBuilder<Task, Task, QFilterCondition> {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> plannedWeekStartIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'plannedWeekStart',
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> plannedWeekStartIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'plannedWeekStart',
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> plannedWeekStartEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'plannedWeekStart',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> plannedWeekStartGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'plannedWeekStart',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> plannedWeekStartLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'plannedWeekStart',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> plannedWeekStartBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'plannedWeekStart',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -885,6 +974,75 @@ extension TaskQueryFilter on QueryBuilder<Task, Task, QFilterCondition> {
     });
   }
 
+  QueryBuilder<Task, Task, QAfterFilterCondition> triagedWeekStartIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'triagedWeekStart',
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> triagedWeekStartIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'triagedWeekStart',
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> triagedWeekStartEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'triagedWeekStart',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> triagedWeekStartGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'triagedWeekStart',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> triagedWeekStartLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'triagedWeekStart',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterFilterCondition> triagedWeekStartBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'triagedWeekStart',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Task, Task, QAfterFilterCondition> updatedAtEqualTo(
       DateTime value) {
     return QueryBuilder.apply(this, (query) {
@@ -992,6 +1150,18 @@ extension TaskQuerySortBy on QueryBuilder<Task, Task, QSortBy> {
     });
   }
 
+  QueryBuilder<Task, Task, QAfterSortBy> sortByPlannedWeekStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeekStart', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterSortBy> sortByPlannedWeekStartDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeekStart', Sort.desc);
+    });
+  }
+
   QueryBuilder<Task, Task, QAfterSortBy> sortByPriority() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'priority', Sort.asc);
@@ -1037,6 +1207,18 @@ extension TaskQuerySortBy on QueryBuilder<Task, Task, QSortBy> {
   QueryBuilder<Task, Task, QAfterSortBy> sortByTitleDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'title', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterSortBy> sortByTriagedWeekStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'triagedWeekStart', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterSortBy> sortByTriagedWeekStartDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'triagedWeekStart', Sort.desc);
     });
   }
 
@@ -1114,6 +1296,18 @@ extension TaskQuerySortThenBy on QueryBuilder<Task, Task, QSortThenBy> {
     });
   }
 
+  QueryBuilder<Task, Task, QAfterSortBy> thenByPlannedWeekStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeekStart', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterSortBy> thenByPlannedWeekStartDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeekStart', Sort.desc);
+    });
+  }
+
   QueryBuilder<Task, Task, QAfterSortBy> thenByPriority() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'priority', Sort.asc);
@@ -1162,6 +1356,18 @@ extension TaskQuerySortThenBy on QueryBuilder<Task, Task, QSortThenBy> {
     });
   }
 
+  QueryBuilder<Task, Task, QAfterSortBy> thenByTriagedWeekStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'triagedWeekStart', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Task, Task, QAfterSortBy> thenByTriagedWeekStartDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'triagedWeekStart', Sort.desc);
+    });
+  }
+
   QueryBuilder<Task, Task, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1200,6 +1406,12 @@ extension TaskQueryWhereDistinct on QueryBuilder<Task, Task, QDistinct> {
     });
   }
 
+  QueryBuilder<Task, Task, QDistinct> distinctByPlannedWeekStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'plannedWeekStart');
+    });
+  }
+
   QueryBuilder<Task, Task, QDistinct> distinctByPriority() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'priority');
@@ -1223,6 +1435,12 @@ extension TaskQueryWhereDistinct on QueryBuilder<Task, Task, QDistinct> {
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'title', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<Task, Task, QDistinct> distinctByTriagedWeekStart() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'triagedWeekStart');
     });
   }
 
@@ -1264,6 +1482,12 @@ extension TaskQueryProperty on QueryBuilder<Task, Task, QQueryProperty> {
     });
   }
 
+  QueryBuilder<Task, DateTime?, QQueryOperations> plannedWeekStartProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'plannedWeekStart');
+    });
+  }
+
   QueryBuilder<Task, int, QQueryOperations> priorityProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'priority');
@@ -1285,6 +1509,12 @@ extension TaskQueryProperty on QueryBuilder<Task, Task, QQueryProperty> {
   QueryBuilder<Task, String, QQueryOperations> titleProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'title');
+    });
+  }
+
+  QueryBuilder<Task, DateTime?, QQueryOperations> triagedWeekStartProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'triagedWeekStart');
     });
   }
 

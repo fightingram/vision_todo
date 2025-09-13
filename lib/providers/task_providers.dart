@@ -83,3 +83,20 @@ final sectionedTasksProvider = Provider.autoDispose<SectionedTasks>((ref) {
   return SectionedTasks(today: today, tomorrow: tomorrow, thisWeek: thisWeek, none: none);
 });
 
+// Watch a single Task by id
+final taskByIdProvider = StreamProvider.family.autoDispose<Task?, int>((ref, id) {
+  final repo = ref.read(taskRepoProvider);
+  return repo.watchById(id);
+});
+
+// Tasks that need triage this week (status not done, and not triaged for current week)
+final triageTasksProvider = Provider.autoDispose<List<Task>>((ref) {
+  final list = ref.watch(tasksStreamProvider).value ?? const <Task>[];
+  if (list.isEmpty) return const [];
+  final now = DateTime.now();
+  final weekStart = du.startOfWeek(now, ref.read(settingsProvider).weekStart);
+  return list
+      .where((t) => t.status != TaskStatus.done)
+      .where((t) => t.triagedWeekStart == null || !du.isSameDate(t.triagedWeekStart!, weekStart))
+      .toList();
+});

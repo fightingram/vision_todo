@@ -8,10 +8,12 @@ import '../../repositories/term_repositories.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
+import '../../providers/settings_provider.dart';
 // Repositories are used via providers; direct imports not needed
 import '../widgets/task_tile.dart';
 import '../../models/tag.dart';
 import 'term_todo_page.dart';
+import 'package:go_router/go_router.dart';
 
 class TodoPage extends ConsumerWidget {
   const TodoPage({super.key});
@@ -19,9 +21,17 @@ class TodoPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final init = ref.watch(isarInitProvider);
+    final settings = ref.watch(settingsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('TODO'),
+        actions: [
+          IconButton(
+            tooltip: settings.showCompleted ? '未完了のみ' : '完了も表示',
+            onPressed: () => ref.read(settingsProvider.notifier).toggleShowCompleted(),
+            icon: Icon(settings.showCompleted ? Icons.checklist : Icons.checklist_rtl),
+          ),
+        ],
       ),
       body: init.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -192,37 +202,13 @@ class _LongFilteredSection extends ConsumerWidget {
             leading: const Icon(Icons.flag_outlined),
             title: InkWell(
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        TermTodoPage(termId: item.id, termTitle: item.title),
-                  ),
-                );
+                context.push('/todo/term/${item.id}', extra: item.title);
               },
               child: Text(item.title),
             ),
             subtitle: Text('TODO ${filteredTasks.length} 件'),
             children: [
-              // Term actions row
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-                child: Row(
-                  children: [
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.emoji_events_outlined),
-                      label: Text(item.archived ? '達成済み' : '達成'),
-                      onPressed: item.archived
-                          ? null
-                          : () async {
-                              await ref
-                                  .read(termRepoProvider)
-                                  .archiveTerm(item, archived: true);
-                            },
-                    ),
-                  ],
-                ),
-              ),
+              // Achieve button moved to Term detail page
               if (filteredTasks.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(12.0),
@@ -233,7 +219,7 @@ class _LongFilteredSection extends ConsumerWidget {
                     .map<Widget>((t) => Card(
                           margin: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 4),
-                          child: TaskTile(task: t),
+                          child: TaskTile(task: t, showCheckbox: false, showEditMenu: false),
                         ))
                     .toList(),
             ],
@@ -289,12 +275,7 @@ class _LongNode extends ConsumerWidget {
         child: ExpansionTile(
           title: InkWell(
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      TermTodoPage(termId: item.id, termTitle: item.title),
-                ),
-              );
+              context.push('/todo/term/${item.id}', extra: item.title);
             },
             child: Text(item.title),
           ),
@@ -328,7 +309,7 @@ class _LongNode extends ConsumerWidget {
                       .map<Widget>((t) => Card(
                             margin: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 4),
-                            child: TaskTile(task: t),
+                            child: TaskTile(task: t, showCheckbox: false, showEditMenu: false),
                           ))
                       .toList(),
                 );

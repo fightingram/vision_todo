@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/dream.dart';
 // Unified Term model for rendering
@@ -464,12 +465,8 @@ class _NodeCard extends ConsumerWidget {
       child: InkWell(
         onTap: () async {
           if (node.level == 1) {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    TermTodoPage(termId: node.id, termTitle: node.title),
-              ),
-            );
+            // Use router navigation so footer nav works
+            context.push('/todo/term/${node.id}', extra: node.title);
           } else if (node.level == 2) {
             await showModalBottomSheet(
               context: context,
@@ -479,7 +476,10 @@ class _NodeCard extends ConsumerWidget {
                   TermDetailSheet(termId: node.id, title: node.title),
             );
           } else if (node.type == 'task') {
-            // Display-only for now
+            // Tap TODO in Maps navigates to TODO detail
+            if (context.mounted) {
+              context.push('/todo/task/${node.id}', extra: node.title);
+            }
           }
         },
         child: Padding(
@@ -1195,7 +1195,7 @@ class _TermNodeContent extends ConsumerWidget {
       children: [
         Text(
           node.title,
-          maxLines: 4,
+          maxLines: 3,
           softWrap: true,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w600),
@@ -1203,22 +1203,33 @@ class _TermNodeContent extends ConsumerWidget {
         if (tags.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4.0),
-            child: Wrap(
-              spacing: 6,
-              runSpacing: -6,
-              children: tags
-                  .map((t) => Chip(
-                        label: Text('#${t.name}',
-                            style: Theme.of(context).textTheme.bodySmall),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 0),
-                        backgroundColor: Color(t.color).withOpacity(0.15),
-                        side:
-                            BorderSide(color: Color(t.color).withOpacity(0.35)),
-                      ))
-                  .toList(),
+            child: SizedBox(
+              height: 22,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: tags
+                      .map((t) => Padding(
+                            padding: const EdgeInsets.only(right: 6.0),
+                            child: Chip(
+                              label: Text('#${t.name}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 0),
+                              backgroundColor:
+                                  Color(t.color).withOpacity(0.15),
+                              side: BorderSide(
+                                  color: Color(t.color).withOpacity(0.35)),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
             ),
           ),
       ],

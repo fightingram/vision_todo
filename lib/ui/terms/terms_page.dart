@@ -423,6 +423,7 @@ class _TermDetailList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final taskRepo = ref.read(taskRepoProvider);
     final stream = taskRepo.watchByTerm(termId);
+    final termWithTags = ref.watch(termWithTagsProvider(termId)).value;
     return StreamBuilder(
       stream: stream,
       builder: (context, snapshot) {
@@ -436,6 +437,20 @@ class _TermDetailList extends ConsumerWidget {
                 children: [
                   Text(title, style: Theme.of(context).textTheme.titleLarge),
                   const Spacer(),
+                  if (termWithTags != null)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.emoji_events_outlined),
+                      label: Text(
+                          termWithTags.item.archived ? '達成済み' : '達成'),
+                      onPressed: termWithTags.item.archived
+                          ? null
+                          : () async {
+                              await ref
+                                  .read(termRepoProvider)
+                                  .archiveTerm(termWithTags.item,
+                                      archived: true);
+                            },
+                    ),
                   IconButton(
                     icon: const Icon(Icons.add_task),
                     onPressed: () async {
@@ -449,6 +464,25 @@ class _TermDetailList extends ConsumerWidget {
                   ),
                 ],
               ),
+              if (termWithTags?.item.dreamId != null)
+                FutureBuilder(
+                  future: ref.read(dreamRepoProvider).getById(termWithTags!.item.dreamId!),
+                  builder: (context, snap) {
+                    final d = snap.data;
+                    if (d == null) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.bedtime_outlined, size: 16),
+                          const SizedBox(width: 6),
+                          Text('夢: ${d.title}'),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               const SizedBox(height: 8),
               Expanded(
                 child: ListView.builder(

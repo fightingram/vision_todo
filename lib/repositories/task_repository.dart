@@ -52,11 +52,31 @@ class TaskRepository {
     });
   }
 
+  Future<void> setStatus(Task task, TaskStatus status) async {
+    final now = DateTime.now();
+    task.status = status;
+    task.doneAt = status == TaskStatus.done ? now : null;
+    task.updatedAt = now;
+    await _isar.writeTxn(() async {
+      await _isar.tasks.put(task);
+    });
+  }
+
+  Future<void> setTriageDecision(Task task, DateTime weekStart,
+      {required bool planned}) async {
+    task.triagedWeekStart = weekStart;
+    task.plannedWeekStart = planned ? weekStart : null;
+    task.updatedAt = DateTime.now();
+    await _isar.writeTxn(() async {
+      await _isar.tasks.put(task);
+    });
+  }
+
   Stream<List<Task>> watchAll({bool includeDone = false}) {
-    final q = includeDone
-        ? _isar.tasks.where().sortByCreatedAt()
-        : _isar.tasks.filter().statusEqualTo(TaskStatus.todo).sortByCreatedAt();
-    return q.watch(fireImmediately: true).asBroadcastStream();
+    // Watch all, then filter in memory to include both todo/doing when exclude done
+    final base = _isar.tasks.where().sortByCreatedAt().watch(fireImmediately: true).asBroadcastStream();
+    if (includeDone) return base;
+    return base.map((list) => list.where((t) => t.status != TaskStatus.done).toList());
   }
 
   // Watch tasks linked to a specific Term
@@ -76,5 +96,10 @@ class TaskRepository {
         .sortByCreatedAt()
         .watch(fireImmediately: true)
         .asBroadcastStream();
+  }
+
+  // Watch a single task by its id
+  Stream<Task?> watchById(Id id) {
+    return _isar.tasks.watchObject(id, fireImmediately: true).asBroadcastStream();
   }
 }
