@@ -131,12 +131,40 @@ class AddItemFlow {
       context: context,
       builder: (context) => SimpleDialog(
         title: Text(title),
-        children: all
-            .map((e) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, e.$1),
-                  child: Text(e.$2),
-                ))
-            .toList(),
+        children: all.map((e) {
+          final isNone = e.$1 == null;
+          final child = isNone
+              ? Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).dividerColor.withOpacity(0.6),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link_off, color: Theme.of(context).disabledColor),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          e.$2,
+                          style: TextStyle(color: Theme.of(context).disabledColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Text(e.$2);
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, e.$1),
+              child: child,
+            ),
+          );
+        }).toList(),
       ),
     );
   }
