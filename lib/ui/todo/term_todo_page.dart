@@ -80,6 +80,38 @@ class TermTodoPage extends ConsumerWidget {
               await repo.add(Task(title: title, shortTermId: targetId));
             },
           ),
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              if (v == 'delete') {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('削除確認'),
+                    content: const Text('この目標を削除しますか？この操作は元に戻せません。'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('キャンセル')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('削除')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  final termRepo = ref.read(termRepoProvider);
+                  final t = await termRepo.getById(termId);
+                  if (t != null) {
+                    await termRepo.deleteTerm(t);
+                    if (context.mounted) Navigator.of(context).pop();
+                  }
+                }
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'delete', child: Text('削除')),
+            ],
+          ),
         ],
       ),
       body: termWithTags.when(

@@ -6,6 +6,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/stats_provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../utils/date_utils.dart' as du;
 import '../widgets/add_item_flow.dart';
 import '../widgets/task_tile.dart';
@@ -113,7 +114,12 @@ class _DreamsHeaderStrip extends ConsumerWidget {
             itemBuilder: (context, index) {
               final d = dreams[index];
               final count = doneCounts[d.id] ?? 0;
-              return _DreamCard(title: d.title, color: Color(d.color), doneCount: count);
+              return _DreamCard(
+                title: d.title,
+                color: Color(d.color),
+                doneCount: count,
+                onTap: () => context.push('/maps/dream/${d.id}', extra: d.title),
+              );
             },
           ),
         ),
@@ -123,10 +129,11 @@ class _DreamsHeaderStrip extends ConsumerWidget {
 }
 
 class _DreamCard extends StatelessWidget {
-  const _DreamCard({required this.title, required this.color, required this.doneCount});
+  const _DreamCard({required this.title, required this.color, required this.doneCount, this.onTap});
   final String title;
   final Color color;
   final int doneCount;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -135,41 +142,45 @@ class _DreamCard extends StatelessWidget {
       child: Card(
         elevation: 1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.8),
-                      shape: BoxShape.circle,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.check_circle, size: 16),
-                  const SizedBox(width: 6),
-                  Text('完了 TODO $doneCount件', style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle, size: 16),
+                    const SizedBox(width: 6),
+                    Text('完了 TODO $doneCount件', style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

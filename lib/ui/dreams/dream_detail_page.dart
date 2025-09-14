@@ -63,6 +63,34 @@ class DreamDetailPage extends ConsumerWidget {
               await ref.read(termRepoProvider).addTerm(title: title, dreamId: dreamId);
             },
           ),
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              if (v == 'delete') {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('削除確認'),
+                    content: const Text('この夢を削除しますか？この操作は元に戻せません。'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('キャンセル')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('削除')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  await ref.read(dreamRepoProvider).delete(dreamId);
+                  if (context.mounted) Navigator.of(context).pop();
+                }
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'delete', child: Text('削除')),
+            ],
+          ),
         ],
       ),
       body: Column(
