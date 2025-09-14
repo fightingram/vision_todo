@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 
 import 'ui/home/home_page.dart';
 import 'ui/todo/todo_page.dart';
@@ -210,11 +211,23 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.fromSeed(seedColor: Colors.teal);
     return MaterialApp.router(
       title: 'Vision TODO',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        colorScheme: colorScheme,
         useMaterial3: true,
+        appBarTheme: AppBarTheme(
+          backgroundColor: colorScheme.surface,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
+        ),
       ),
       routerConfig: _router,
     );
