@@ -124,14 +124,13 @@ class TermRepository {
 
   Future<int> addTerm({
     required String title,
-    required int dreamId,
+    int? dreamId,
     int? parentId,
     int priority = 1,
     DateTime? dueAt,
   }) async {
     if (parentId == null) {
-      final ent = LongTerm(
-          title: title, dreamId: dreamId, priority: priority, dueAt: dueAt);
+      final ent = LongTerm(title: title, dreamId: dreamId, priority: priority, dueAt: dueAt);
       await LongTermRepository(_db).put(ent);
       return ent.id;
     } else {
@@ -315,9 +314,6 @@ class LongTermRepository {
   }
 
   Future<void> put(LongTerm item) async {
-    if (item.dreamId == null) {
-      throw ArgumentError('Term must be linked to a Dream');
-    }
     item.updatedAt = DateTime.now();
     await _isar.writeTxn(() async => _isar.longTerms.put(item));
   }

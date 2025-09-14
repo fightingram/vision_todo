@@ -6,7 +6,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
 import '../../utils/date_utils.dart' as du;
 import '../widgets/character_band.dart';
-import '../widgets/new_item_dialog.dart';
+import '../widgets/add_item_flow.dart';
 import '../widgets/task_tile.dart';
 
 
@@ -42,10 +42,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       floatingActionButton: FloatingActionButton(
         tooltip: '新規作成',
         onPressed: () async {
-          await showDialog(
-            context: context,
-            builder: (_) => const NewItemDialog(),
-          );
+          await AddItemFlow.show(context, ref);
         },
         child: const Icon(Icons.add),
       ),

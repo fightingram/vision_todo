@@ -7,6 +7,7 @@ import 'ui/todo/todo_page.dart';
 import 'ui/todo/term_todo_page.dart';
 import 'ui/todo/task_detail_page.dart';
 import 'ui/maps/maps_page.dart';
+import 'ui/dreams/dream_detail_page.dart';
 import 'ui/triage/triage_page.dart';
 import 'providers/task_providers.dart';
 import 'providers/db_provider.dart';
@@ -29,89 +30,15 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   bool _startupTriageTriggered = false;
   DateTime? _lastHandledWeekStart;
   bool _triagePushInProgress = false;
+  int _lastKnownTriageCount = 0;
+  late final GoRouter _router;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // アプリ起動時（DB初期化直後）に一度だけチェックして開く
-    ref.listen<AsyncValue<void>>(isarInitProvider, (prev, next) {
-      if (_startupTriageTriggered) return;
-      if (next is AsyncData) {
-        _startupTriageTriggered = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final items = ref.read(triageTasksProvider);
-          final ws = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
-          _lastHandledWeekStart = ws;
-          if (mounted && items.isNotEmpty) {
-            _triagePushInProgress = true;
-            context.push('/triage').whenComplete(() {
-              _triagePushInProgress = false;
-            });
-          }
-        });
-      }
-    });
-
-    // 同週内で未仕分けが増えたら自動で開く（オプション）
-    ref.listen<List<Task>>(triageTasksProvider, (prev, next) {
-      if (!_startupTriageTriggered) return; // 起動直後の初期化が完了してから
-      final settings = ref.read(settingsProvider);
-      final currentWeek = du.startOfWeek(DateTime.now(), settings.weekStart);
-      // 同週のみ対象
-      if (_lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, currentWeek)) {
-        return;
-      }
-      final prevLen = (prev?.length ?? 0);
-      final nextLen = (next?.length ?? 0);
-      final increased = nextLen > prevLen;
-      if (!increased || nextLen == 0) return;
-      // 既にトリアージ画面、または遷移中なら何もしない
-      if (_triagePushInProgress) return;
-      final loc = GoRouterState.of(context).uri.toString();
-      if (loc.startsWith('/triage')) return;
-      if (mounted) {
-        _triagePushInProgress = true;
-        context.push('/triage').whenComplete(() {
-          _triagePushInProgress = false;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      // フォアグラウンド復帰時に週替わりを検知
-      final weekStartNow = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
-      final hasChanged = _lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, weekStartNow);
-      if (hasChanged) {
-        _lastHandledWeekStart = weekStartNow; // 同週での重複表示を防止
-        // 既に仕分け画面なら何もしない
-        final loc = GoRouterState.of(context).uri.toString();
-        if (loc.startsWith('/triage')) return;
-        final items = ref.read(triageTasksProvider);
-        if (items.isNotEmpty && mounted) {
-          // 現在の画面の上に仕分けを表示
-          _triagePushInProgress = true;
-          context.push('/triage').whenComplete(() {
-            _triagePushInProgress = false;
-          });
-        }
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final router = GoRouter(
+    // ルーターを先に構築しておき、コンテキストに依存せずに遷移できるようにする
+    _router = GoRouter(
       initialLocation: '/home',
       routes: [
         GoRoute(
@@ -169,18 +96,127 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
                 child: MapsPage(),
               ),
             ),
+            GoRoute(
+              path: '/maps/dream/:id',
+              name: 'dream_detail',
+              pageBuilder: (context, state) {
+                final id = int.parse(state.pathParameters['id']!);
+                final title = (state.extra is String) ? state.extra as String : '夢';
+                return MaterialPage(
+                  key: state.pageKey,
+                  child: DreamDetailPage(dreamId: id, initialTitle: title),
+                );
+              },
+            ),
           ],
         ),
       ],
     );
+    // アプリ起動時（DB初期化直後）に一度だけチェックして開く
+    ref.listen<AsyncValue<void>>(isarInitProvider, (prev, next) {
+      if (_startupTriageTriggered) return;
+      if (next is AsyncData) {
+        _startupTriageTriggered = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final items = ref.read(triageTasksProvider);
+          final ws = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
+          _lastHandledWeekStart = ws;
+          _lastKnownTriageCount = items.length;
+          if (mounted && items.isNotEmpty) {
+            _triagePushInProgress = true;
+            _router.push('/triage').whenComplete(() {
+              _triagePushInProgress = false;
+            });
+          }
+        });
+      }
+    });
 
+    // 同週内で未仕分けが増えたら自動で開く（オプション）
+    ref.listen<List<Task>>(triageTasksProvider, (prev, next) {
+      if (!_startupTriageTriggered) return; // 起動直後の初期化が完了してから
+      final settings = ref.read(settingsProvider);
+      final currentWeek = du.startOfWeek(DateTime.now(), settings.weekStart);
+      // 同週のみ対象
+      if (_lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, currentWeek)) {
+        // 週が変わった場合はここではカウントだけ更新
+        _lastKnownTriageCount = next.length;
+        return;
+      }
+      final prevLen = (prev?.length ?? 0);
+      final nextLen = (next?.length ?? 0);
+      final increased = nextLen > prevLen;
+      // 既にトリアージ画面、または遷移中なら何もしない
+      if (increased && nextLen > 0 && !_triagePushInProgress) {
+        final loc = _router.routeInformationProvider.value.location ?? '';
+        if (!loc.startsWith('/triage') && mounted) {
+          _triagePushInProgress = true;
+          _router.push('/triage').whenComplete(() {
+            _triagePushInProgress = false;
+          });
+        }
+      }
+      // ベースラインとして最後の件数を記録
+      _lastKnownTriageCount = nextLen;
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // フォアグラウンド復帰時に週替わりを検知
+      final weekStartNow = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
+      final hasChanged = _lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, weekStartNow);
+      if (hasChanged) {
+        _lastHandledWeekStart = weekStartNow; // 同週での重複表示を防止
+        // 既に仕分け画面なら何もしない
+        final loc = _router.routeInformationProvider.value.location ?? '';
+        if (loc.startsWith('/triage')) return;
+        final items = ref.read(triageTasksProvider);
+        _lastKnownTriageCount = items.length; // 新しい週の基準を更新
+        if (items.isNotEmpty && mounted) {
+          // 現在の画面の上に仕分けを表示
+          _triagePushInProgress = true;
+          _router.push('/triage').whenComplete(() {
+            _triagePushInProgress = false;
+          });
+        }
+      } else {
+        // 同週内のフォアグラウンド復帰時：前回基準より増えていれば表示
+        final items = ref.read(triageTasksProvider);
+        final nextLen = items.length;
+        final increased = nextLen > _lastKnownTriageCount;
+        if (increased && nextLen > 0 && !_triagePushInProgress) {
+          final loc = _router.routeInformationProvider.value.location ?? '';
+          if (!loc.startsWith('/triage') && mounted) {
+            _triagePushInProgress = true;
+            _router.push('/triage').whenComplete(() {
+              _triagePushInProgress = false;
+            });
+          }
+        }
+        // 復帰時点の件数を基準として更新
+        _lastKnownTriageCount = nextLen;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Vision TODO',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      routerConfig: router,
+      routerConfig: _router,
     );
   }
 }

@@ -15,6 +15,7 @@ import '../todo/term_todo_page.dart';
 import '../terms/tags_page.dart';
 import '../../models/tag.dart';
 import '../../repositories/term_repositories.dart';
+import '../widgets/add_item_flow.dart';
 
 class MapsPage extends ConsumerWidget {
   const MapsPage({super.key});
@@ -37,13 +38,12 @@ class MapsPage extends ConsumerWidget {
           ),
           IconButton(
             onPressed: () async {
-              final title = await _askTitle(context, '夢を追加');
-              if (title != null) {
-                await ref.read(dreamRepoProvider).put(Dream(title: title));
-              }
+              // Unified add flow shared with Home
+              // ignore: use_build_context_synchronously
+              await AddItemFlow.show(context, ref);
             },
             icon: const Icon(Icons.add),
-            tooltip: '夢を追加',
+            tooltip: '追加',
           ),
         ],
       ),
@@ -464,17 +464,17 @@ class _NodeCard extends ConsumerWidget {
       ),
       child: InkWell(
         onTap: () async {
-          if (node.level == 1) {
+          if (node.level == 0) {
+            // Dream detail page
+            if (context.mounted) {
+              context.push('/maps/dream/${node.id}', extra: node.title);
+            }
+          } else if (node.level == 1) {
             // Use router navigation so footer nav works
             context.push('/todo/term/${node.id}', extra: node.title);
           } else if (node.level == 2) {
-            await showModalBottomSheet(
-              context: context,
-              useSafeArea: true,
-              isScrollControlled: true,
-              builder: (context) =>
-                  TermDetailSheet(termId: node.id, title: node.title),
-            );
+            // Navigate to Term detail page
+            context.push('/todo/term/${node.id}', extra: node.title);
           } else if (node.type == 'task') {
             // Tap TODO in Maps navigates to TODO detail
             if (context.mounted) {
@@ -498,116 +498,6 @@ class _NodeCard extends ConsumerWidget {
                     ),
                 },
               ),
-              if (node.level != 3)
-                PopupMenuButton<String>(
-                  onSelected: (v) async {
-                    switch (v) {
-                      case 'add_child':
-                        // Create a top-level term under Dream with a full form
-                        if (node.level == 0) {
-                          final allTags = ref.read(tagsProvider).value ??
-                              await ref.read(tagRepoProvider).watchAll().first;
-                          final created = await showDialog<_TermCreateResult>(
-                            context: context,
-                            builder: (_) => _CreateTermDialog(allTags: allTags),
-                          );
-                          if (created != null) {
-                            final id = await ref.read(termRepoProvider).addTerm(
-                                  title: created.title,
-                                  dreamId: node.id,
-                                  priority: created.priority,
-                                  dueAt: created.dueAt,
-                                );
-                            if (created.tags.isNotEmpty) {
-                              await ref
-                                  .read(termRepoProvider)
-                                  .setTagsById(id, created.tags);
-                            }
-                          }
-                        }
-                        break;
-                      case 'edit':
-                        if (node.level == 0) {
-                          final repo = ref.read(dreamRepoProvider);
-                          final ent = await repo.getById(node.id);
-                          if (ent == null) break;
-                          final updated = await showDialog<Dream>(
-                            context: context,
-                            builder: (_) => _EditDreamDialog(initial: ent),
-                          );
-                          if (updated != null) {
-                            await repo.put(updated);
-                          }
-                        } else if (node.level == 1) {
-                          final repo = ref.read(termRepoProvider);
-                          final ent = await repo.getById(node.id);
-                          if (ent == null) break;
-                          final allTags = ref.read(tagsProvider).value ??
-                              await ref.read(tagRepoProvider).watchAll().first;
-                          final initialTags = await repo.loadTags(ent);
-                          final updated = await showDialog<_TermEditResult>(
-                            context: context,
-                            builder: (_) => _EditTermDialog(
-                                initial: ent,
-                                allTags: allTags,
-                                initialTags: initialTags),
-                          );
-                          if (updated != null) {
-                            await repo.updateTerm(updated.item, updated.tags);
-                          }
-                        }
-                        break;
-                      case 'open_tasks':
-                        if (node.type == 'short') {
-                          await showModalBottomSheet(
-                            context: context,
-                            useSafeArea: true,
-                            isScrollControlled: true,
-                            builder: (context) => TermDetailSheet(
-                                termId: node.id, title: node.title),
-                          );
-                        }
-                        break;
-                      case 'edit_tags':
-                        final allTags =
-                            await ref.read(tagRepoProvider).watchAll().first;
-                        final current = await ref
-                            .read(termRepoProvider)
-                            .watchWithTags(node.id)
-                            .first;
-                        final picked = await showDialog<List<Tag>>(
-                          context: context,
-                          builder: (context) => _TagPickerDialog(
-                            allTags: allTags,
-                            initial: current?.tags ?? const <Tag>[],
-                          ),
-                        );
-                        if (picked != null) {
-                          await ref
-                              .read(termRepoProvider)
-                              .setTagsById(node.id, picked);
-                        }
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) {
-                    final items = <PopupMenuEntry<String>>[];
-                    // Only allow creating a child term under a Dream
-                    if (node.level == 0) {
-                      items.add(const PopupMenuItem(
-                          value: 'add_child', child: Text('子を追加')));
-                    }
-                    if (node.level == 0 || node.level == 1) {
-                      items.add(const PopupMenuItem(
-                          value: 'edit', child: Text('編集')));
-                    }
-                    if (node.level == 2) {
-                      items.add(const PopupMenuItem(
-                          value: 'open_tasks', child: Text('タスクを管理')));
-                    }
-                    return items;
-                  },
-                ),
             ],
           ),
         ),

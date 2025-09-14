@@ -231,7 +231,11 @@ class TermTodoPage extends ConsumerWidget {
                       itemBuilder: (context, i) => Card(
                         margin: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
-                        child: TaskTile(task: items[i]),
+                        child: TaskTile(
+                          task: items[i],
+                          showCheckbox: false,
+                          showEditMenu: false,
+                        ),
                       ),
                     );
                   },
