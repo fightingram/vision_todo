@@ -4,6 +4,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
+import '../../providers/term_providers.dart';
+import '../../providers/stats_provider.dart';
 import '../../utils/date_utils.dart' as du;
 import '../widgets/add_item_flow.dart';
 import '../widgets/task_tile.dart';
@@ -66,6 +68,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               });
             return Column(
               children: [
+                const _DreamsHeaderStrip(),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -77,6 +80,97 @@ class _HomePageState extends ConsumerState<HomePage> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _DreamsHeaderStrip extends ConsumerWidget {
+  const _DreamsHeaderStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dreams = ref.watch(dreamsProvider).value ?? const [];
+    final doneCounts = ref.watch(dreamDoneCountsProvider);
+
+    if (dreams.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text('夢', style: Theme.of(context).textTheme.titleMedium),
+        ),
+        SizedBox(
+          height: 92,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            scrollDirection: Axis.horizontal,
+            itemCount: dreams.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final d = dreams[index];
+              final count = doneCounts[d.id] ?? 0;
+              return _DreamCard(title: d.title, color: Color(d.color), doneCount: count);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DreamCard extends StatelessWidget {
+  const _DreamCard({required this.title, required this.color, required this.doneCount});
+  final String title;
+  final Color color;
+  final int doneCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 200,
+      child: Card(
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.check_circle, size: 16),
+                  const SizedBox(width: 6),
+                  Text('完了 TODO $doneCount件', style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
