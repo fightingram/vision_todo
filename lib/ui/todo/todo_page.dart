@@ -154,21 +154,56 @@ class _FilteredTodosView extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('読み込みエラー: $e')),
       data: (longs) {
-        if (longs.isEmpty) {
-          return const Center(child: Text('該当のTermはありません'));
-        }
         final tasks = tasksAsync.value ?? const <Task>[];
+        final children = <Widget>[];
+
+        // Sections for each Term
+        for (final l in longs) {
+          children.add(_LongFilteredSection(item: l, tagId: tagId, allTasks: tasks));
+        }
+
+        // Unlinked tasks section (only when tag filter is not applied)
+        if (tagId == null) {
+          final unlinked = tasks.where((t) => t.shortTermId == null).toList();
+          if (unlinked.isNotEmpty) {
+            children.add(_UnlinkedSection(tasks: unlinked));
+          }
+        }
+
+        if (children.isEmpty) {
+          return const Center(child: Text('TODOはありません'));
+        }
+
         return ListView(
           padding: const EdgeInsets.all(12),
-          children: longs
-              .map((l) => _LongFilteredSection(
-                    item: l,
-                    tagId: tagId,
-                    allTasks: tasks,
-                  ))
-              .toList(),
+          children: children,
         );
       },
+    );
+  }
+}
+
+class _UnlinkedSection extends StatelessWidget {
+  const _UnlinkedSection({required this.tasks});
+  final List<Task> tasks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        leading: const Icon(Icons.link_off),
+        title: const Text('紐付けなし'),
+        subtitle: Text('TODO ${tasks.length} 件'),
+        children: [
+          ...tasks
+              .map<Widget>((t) => Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: TaskTile(task: t, showCheckbox: false, showEditMenu: false),
+                  ))
+              .toList(),
+        ],
+      ),
     );
   }
 }
