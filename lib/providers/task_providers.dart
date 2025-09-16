@@ -18,6 +18,31 @@ final tasksStreamProvider = StreamProvider.autoDispose<List<Task>>((ref) {
   return repo.watchAll(includeDone: showCompleted);
 });
 
+// Always include done; used for rich filtering
+final allTasksStreamProvider =
+    StreamProvider.autoDispose<List<Task>>((ref) {
+  final repo = ref.read(taskRepoProvider);
+  return repo.watchAll(includeDone: true);
+});
+
+// Apply status/priority filters for TODO page
+final filteredTasksProvider = Provider.autoDispose<List<Task>>((ref) {
+  final list = ref.watch(allTasksStreamProvider).value ?? const <Task>[];
+  final settings = ref.watch(settingsProvider);
+  Iterable<Task> it = list;
+  // If no explicit status filter, exclude done by default
+  if (settings.statusFilter.isEmpty) {
+    it = it.where((t) => t.status != TaskStatus.done);
+  }
+  if (settings.statusFilter.isNotEmpty) {
+    it = it.where((t) => settings.statusFilter.contains(t.status));
+  }
+  if (settings.priorityFilter.isNotEmpty) {
+    it = it.where((t) => settings.priorityFilter.contains(t.priority));
+  }
+  return it.toList();
+});
+
 class SectionedTasks {
   const SectionedTasks({
     required this.today,

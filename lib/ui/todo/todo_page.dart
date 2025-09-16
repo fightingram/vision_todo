@@ -27,9 +27,9 @@ class TodoPage extends ConsumerWidget {
         title: const Text('TODO'),
         actions: [
           IconButton(
-            tooltip: settings.showCompleted ? '未完了のみ' : '完了も表示',
-            onPressed: () => ref.read(settingsProvider.notifier).toggleShowCompleted(),
-            icon: Icon(settings.showCompleted ? Icons.checklist : Icons.checklist_rtl),
+            tooltip: 'フィルター',
+            onPressed: () => _openTodoFilter(context, ref),
+            icon: const Icon(Icons.filter_list),
           ),
         ],
       ),
@@ -141,6 +141,136 @@ class _TodoTreeState extends ConsumerState<_TodoTree>
   }
 }
 
+Future<void> _openTodoFilter(BuildContext context, WidgetRef ref) async {
+  final settings = ref.read(settingsProvider);
+  final initialStatuses = Set<TaskStatus>.from(settings.statusFilter);
+  final initialPrios = Set<int>.from(settings.priorityFilter);
+
+  String priorityLabel(int p) {
+    switch (p) {
+      case 3:
+        return '最優先';
+      case 2:
+        return '高';
+      case 1:
+        return '中';
+      default:
+        return '低';
+    }
+  }
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) {
+      final statuses = Set<TaskStatus>.from(initialStatuses);
+      final prios = Set<int>.from(initialPrios);
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              left: 16,
+              right: 16,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.filter_list),
+                      const SizedBox(width: 8),
+                      const Text('フィルター', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          statuses.clear();
+                          prios.clear();
+                          setState(() {});
+                        },
+                        child: const Text('クリア'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('ステータス'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('未着手'),
+                        selected: statuses.contains(TaskStatus.todo),
+                        onSelected: (v) => setState(() {
+                          v ? statuses.add(TaskStatus.todo) : statuses.remove(TaskStatus.todo);
+                        }),
+                      ),
+                      FilterChip(
+                        label: const Text('進行中'),
+                        selected: statuses.contains(TaskStatus.doing),
+                        onSelected: (v) => setState(() {
+                          v ? statuses.add(TaskStatus.doing) : statuses.remove(TaskStatus.doing);
+                        }),
+                      ),
+                      FilterChip(
+                        label: const Text('完了'),
+                        selected: statuses.contains(TaskStatus.done),
+                        onSelected: (v) => setState(() {
+                          v ? statuses.add(TaskStatus.done) : statuses.remove(TaskStatus.done);
+                        }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('優先度'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: List.generate(4, (i) => i)
+                        .map((p) => FilterChip(
+                              label: Text(priorityLabel(p)),
+                              selected: prios.contains(p),
+                              onSelected: (v) => setState(() {
+                                v ? prios.add(p) : prios.remove(p);
+                              }),
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('閉じる'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () {
+                          final notifier = ref.read(settingsProvider.notifier);
+                          notifier.setStatusFilter(statuses);
+                          notifier.setPriorityFilter(prios);
+                          Navigator.pop(context);
+                        },
+                        child: const Text('適用'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 class _FilteredTodosView extends ConsumerWidget {
   const _FilteredTodosView({required this.dreamId, required this.tagId});
   final int? dreamId;
@@ -149,12 +279,12 @@ class _FilteredTodosView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final longsAsync = ref.watch(termsByDreamProvider(dreamId));
-    final tasksAsync = ref.watch(tasksStreamProvider);
+    final filteredTasks = ref.watch(filteredTasksProvider);
     return longsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('読み込みエラー: $e')),
       data: (longs) {
-        final tasks = tasksAsync.value ?? const <Task>[];
+        final tasks = filteredTasks;
         final children = <Widget>[];
 
         // Sections for each Term
@@ -303,7 +433,7 @@ class _LongNode extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final shortsAsync = ref.watch(termsByParentProvider(item.id));
-    final tasksAsync = ref.watch(tasksStreamProvider);
+    final tasks = ref.watch(filteredTasksProvider);
     return Padding(
       padding: const EdgeInsets.only(left: 12.0, right: 12.0, bottom: 12.0),
       child: Card(
@@ -327,7 +457,6 @@ class _LongNode extends ConsumerWidget {
               ),
               data: (shorts) {
                 final shortIds = shorts.map((s) => s.id).toSet();
-                final tasks = tasksAsync.value ?? const <Task>[];
                 final filtered = tasks
                     .where((t) =>
                         t.shortTermId != null &&
