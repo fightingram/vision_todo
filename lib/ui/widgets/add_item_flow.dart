@@ -6,6 +6,7 @@ import '../../models/task.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
 import '../../repositories/term_repositories.dart';
+import 'navigation_utils.dart';
 
 enum _AddType { dream, term, task }
 
@@ -55,18 +56,42 @@ class AddItemFlow {
 
     switch (type) {
       case _AddType.dream:
-        await ref.read(dreamRepoProvider).put(Dream(title: title, priority: priority, dueAt: dueAt));
+        final ent = Dream(title: title, priority: priority, dueAt: dueAt);
+        await ref.read(dreamRepoProvider).put(ent);
+        await promptNavigateToDetail(
+          context,
+          label: '夢',
+          title: ent.title,
+          route: '/maps/dream/${ent.id}',
+          extra: ent.title,
+        );
         break;
       case _AddType.term:
-        await ref.read(termRepoProvider).addTerm(
+        final id = await ref.read(termRepoProvider).addTerm(
               title: title,
               dreamId: selectedDreamId,
               priority: priority,
               dueAt: dueAt,
             );
+        await promptNavigateToDetail(
+          context,
+          label: '目標',
+          title: title,
+          route: '/todo/term/$id',
+          extra: title,
+        );
         break;
       case _AddType.task:
-        await ref.read(taskRepoProvider).add(Task(title: title, priority: priority, dueAt: dueAt, shortTermId: selectedTermId));
+        final task = await ref
+            .read(taskRepoProvider)
+            .add(Task(title: title, priority: priority, dueAt: dueAt, shortTermId: selectedTermId));
+        await promptNavigateToDetail(
+          context,
+          label: 'TODO',
+          title: task.title,
+          route: '/todo/task/${task.id}',
+          extra: task.title,
+        );
         break;
     }
   }

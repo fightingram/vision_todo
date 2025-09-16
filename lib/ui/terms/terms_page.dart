@@ -9,6 +9,7 @@ import 'tags_page.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/task_providers.dart';
 import '../../repositories/term_repositories.dart';
+import '../widgets/navigation_utils.dart';
 
 class TermsPage extends ConsumerWidget {
   const TermsPage({super.key});
@@ -49,9 +50,15 @@ class TermsPage extends ConsumerWidget {
                         onPressed: () async {
                           final title = await _askTitle(context, '夢を追加');
                           if (title != null) {
-                            await ref
-                                .read(dreamRepoProvider)
-                                .put(Dream(title: title));
+                            final ent = Dream(title: title);
+                            await ref.read(dreamRepoProvider).put(ent);
+                            await promptNavigateToDetail(
+                              context,
+                              label: '夢',
+                              title: ent.title,
+                              route: '/maps/dream/${ent.id}',
+                              extra: ent.title,
+                            );
                           }
                         },
                         icon: const Icon(Icons.add),
@@ -98,9 +105,16 @@ class DreamTile extends ConsumerWidget {
               onPressed: () async {
                 final title = await _askTitle(context, 'Termを追加');
                 if (title != null) {
-                  await ref
+                  final id = await ref
                       .read(termRepoProvider)
                       .addTerm(title: title, dreamId: dream.id);
+                  await promptNavigateToDetail(
+                    context,
+                    label: '目標',
+                    title: title,
+                    route: '/todo/term/$id',
+                    extra: title,
+                  );
                 }
               },
             ),
@@ -180,8 +194,15 @@ class TermTile extends ConsumerWidget {
                   if (title != null) {
                     final dreamId = item.dreamId;
                     if (dreamId == null) return;
-                    await ref.read(termRepoProvider).addTerm(
+                    final id = await ref.read(termRepoProvider).addTerm(
                         title: title, dreamId: dreamId, parentId: item.id);
+                    await promptNavigateToDetail(
+                      context,
+                      label: '目標',
+                      title: title,
+                      route: '/todo/term/$id',
+                      extra: title,
+                    );
                   }
                 },
               ),
@@ -487,6 +508,13 @@ class _TermDetailList extends ConsumerWidget {
                         final t = await taskRepo.addQuick(title);
                         t.shortTermId = termId; // unified: tasks link to termId
                         await taskRepo.update(t);
+                        await promptNavigateToDetail(
+                          context,
+                          label: 'TODO',
+                          title: t.title,
+                          route: '/todo/task/${t.id}',
+                          extra: t.title,
+                        );
                       }
                     },
                   ),

@@ -4,12 +4,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../providers/db_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
+import '../../providers/order_provider.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/stats_provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/date_utils.dart' as du;
 import '../widgets/add_item_flow.dart';
 import '../widgets/task_tile.dart';
+import '../../models/task.dart';
 
 
 class HomePage extends ConsumerStatefulWidget {
@@ -74,7 +76,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     children: [
-                      _Section(title: '今週', tasks: thisWeek),
+                      _Section(
+                        title: '今週',
+                        tasks: thisWeek,
+                        orderKey: 'home_this_week_${weekStart.millisecondsSinceEpoch}',
+                      ),
                     ],
                   ),
                 ),
@@ -188,10 +194,59 @@ class _DreamCard extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.tasks});
+class _Section extends ConsumerStatefulWidget {
+  const _Section({required this.title, required this.tasks, this.orderKey});
   final String title;
-  final List tasks;
+  final List<Task> tasks;
+  final String? orderKey;
+
+  @override
+  ConsumerState<_Section> createState() => _SectionState();
+}
+
+class _SectionState extends ConsumerState<_Section> {
+  List<Task> _items = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Section oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tasks.length != widget.tasks.length ||
+        !_sameIds(oldWidget.tasks, widget.tasks)) {
+      _load();
+    }
+  }
+
+  bool _sameIds(List<Task> a, List<Task> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+    }
+    return true;
+  }
+
+  Future<void> _load() async {
+    final key = widget.orderKey;
+    if (key == null) {
+      setState(() => _items = List.of(widget.tasks));
+      return;
+    }
+    final service = ref.read(orderServiceProvider);
+    final order = await service.getOrder(key);
+    final map = {for (final t in widget.tasks) t.id: t};
+    final ordered = <Task>[];
+    for (final id in order) {
+      final t = map.remove(id);
+      if (t != null) ordered.add(t);
+    }
+    ordered.addAll(map.values);
+    setState(() => _items = ordered);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,23 +255,41 @@ class _Section extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+          child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
         ),
-        if (tasks.isEmpty)
+        if (_items.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Text(
-              title == '今日' ? '今日のTODOはありません' : 'タスクはありません',
+              widget.title == '今日' ? '今日のTODOはありません' : 'タスクはありません',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           )
         else
-          ...tasks
-              .map<Widget>((t) => Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: TaskTile(task: t, showCheckbox: false, showEditMenu: false),
-                  ))
-              .toList(),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _items.length,
+            onReorder: (oldIndex, newIndex) async {
+              setState(() {
+                if (newIndex > oldIndex) newIndex -= 1;
+                final item = _items.removeAt(oldIndex);
+                _items.insert(newIndex, item);
+              });
+              final key = widget.orderKey;
+              if (key != null) {
+                await ref.read(orderServiceProvider).setOrder(
+                      key,
+                      _items.map((e) => e.id).toList(),
+                    );
+              }
+            },
+            itemBuilder: (context, i) => Card(
+              key: ValueKey('home_task_${_items[i].id}'),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: TaskTile(task: _items[i], showCheckbox: false, showEditMenu: false),
+            ),
+          ),
       ],
     );
   }

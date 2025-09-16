@@ -9,6 +9,7 @@ import '../../providers/term_providers.dart';
 import '../widgets/task_tile.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/memo_editor.dart';
+import '../widgets/navigation_utils.dart';
 
 class TermTodoPage extends ConsumerWidget {
   const TermTodoPage(
@@ -106,7 +107,14 @@ class TermTodoPage extends ConsumerWidget {
                 );
               }
               if (targetId == null) return;
-              await repo.add(Task(title: title, shortTermId: targetId));
+              final t = await repo.add(Task(title: title, shortTermId: targetId));
+              await promptNavigateToDetail(
+                context,
+                label: 'TODO',
+                title: t.title,
+                route: '/todo/task/${t.id}',
+                extra: t.title,
+              );
             },
           ),
           PopupMenuButton<String>(

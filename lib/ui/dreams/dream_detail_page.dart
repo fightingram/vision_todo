@@ -7,6 +7,7 @@ import '../../models/task.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
 import '../widgets/memo_editor.dart';
+import '../widgets/navigation_utils.dart';
 
 final _includeArchivedProvider =
     StateProvider.autoDispose.family<bool, int>((ref, dreamId) => false);
@@ -92,7 +93,15 @@ class DreamDetailPage extends ConsumerWidget {
             onPressed: () async {
               final title = await _askTitle(context, 'Termを追加');
               if (title == null || title.isEmpty) return;
-              await ref.read(termRepoProvider).addTerm(title: title, dreamId: dreamId);
+              final id = await ref.read(termRepoProvider).addTerm(title: title, dreamId: dreamId);
+              if (!context.mounted) return;
+              await promptNavigateToDetail(
+                context,
+                label: '目標',
+                title: title,
+                route: '/todo/term/$id',
+                extra: title,
+              );
             },
           ),
           PopupMenuButton<String>(
