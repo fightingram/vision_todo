@@ -229,6 +229,19 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
           ),
         ),
       ),
+      builder: (context, child) {
+        // Dismiss keyboard when tapping outside of inputs anywhere in the app
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            final currentFocus = FocusScope.of(context);
+            if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+              currentFocus.unfocus();
+            }
+          },
+          child: child,
+        );
+      },
       routerConfig: _router,
     );
   }

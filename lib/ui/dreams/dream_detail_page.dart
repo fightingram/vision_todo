@@ -6,6 +6,7 @@ import '../../models/dream.dart';
 import '../../models/task.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
+import '../widgets/memo_editor.dart';
 
 final _includeArchivedProvider =
     StateProvider.autoDispose.family<bool, int>((ref, dreamId) => false);
@@ -205,6 +206,8 @@ class DreamDetailPage extends ConsumerWidget {
                 ),
               ),
             ),
+          if (dream != null) const SizedBox(height: 4),
+          if (dream != null) MemoEditor(type: 'dream', id: dreamId),
           // Filter row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12.0),

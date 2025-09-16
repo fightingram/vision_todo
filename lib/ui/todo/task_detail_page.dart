@@ -8,6 +8,7 @@ import '../../models/short_term.dart';
 import '../../models/long_term.dart';
 import '../../models/dream.dart';
 import '../../models/tag.dart';
+import '../widgets/memo_editor.dart';
 
 class TaskDetailPage extends ConsumerWidget {
   const TaskDetailPage({super.key, required this.taskId, this.initialTitle});
@@ -223,6 +224,7 @@ class TaskDetailPage extends ConsumerWidget {
                   ),
                 ),
               ),
+              MemoEditor(type: 'task', id: task.id),
               FutureBuilder<(ShortTerm?, LongTerm?, Dream?, List<Tag>)>(
                 future: loadChain(task),
                 builder: (context, snapshot) {

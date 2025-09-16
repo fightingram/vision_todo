@@ -7,6 +7,7 @@ import '../../repositories/term_repositories.dart';
 import '../../providers/task_providers.dart';
 import '../../providers/term_providers.dart';
 import '../widgets/task_tile.dart';
+import '../widgets/memo_editor.dart';
 
 class TermTodoPage extends ConsumerWidget {
   const TermTodoPage(
@@ -268,6 +269,7 @@ class TermTodoPage extends ConsumerWidget {
                   ),
                 ),
               ),
+              MemoEditor(type: 'term', id: termId),
               Expanded(
                 child: shortsAsync.when(
                   loading: () =>
