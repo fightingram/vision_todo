@@ -273,7 +273,6 @@ class TermTodoPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              MemoEditor(type: 'term', id: termId),
               Expanded(
                 child: shortsAsync.when(
                   loading: () =>
@@ -290,20 +289,26 @@ class TermTodoPage extends ConsumerWidget {
                             t.shortTermId != null &&
                             shortIds.contains(t.shortTermId))
                         .toList();
+                    final children = <Widget>[];
                     if (items.isEmpty) {
-                      return const Center(child: Text('TODOはありません'));
+                      children.add(const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: Center(child: Text('TODOはありません')),
+                      ));
+                    } else {
+                      children.addAll(items.map((t) => Card(
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            child: TaskTile(
+                              task: t,
+                              showCheckbox: false,
+                              showEditMenu: false,
+                            ),
+                          )));
                     }
-                    return ListView.builder(
-                      itemCount: items.length,
-                      itemBuilder: (context, i) => Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        child: TaskTile(
-                          task: items[i],
-                          showCheckbox: false,
-                          showEditMenu: false,
-                        ),
-                      ),
+                    children.add(MemoEditor(type: 'term', id: termId));
+                    return ListView(
+                      children: children,
                     );
                   },
                 ),

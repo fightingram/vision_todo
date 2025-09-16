@@ -206,8 +206,6 @@ class DreamDetailPage extends ConsumerWidget {
                 ),
               ),
             ),
-          if (dream != null) const SizedBox(height: 4),
-          if (dream != null) MemoEditor(type: 'dream', id: dreamId),
           // Filter row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -226,12 +224,29 @@ class DreamDetailPage extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('読み込みエラー: $e')),
               data: (terms) {
-                if (terms.isEmpty) {
-                  return const Center(child: Text('Termはありません'));
-                }
                 return ListView.builder(
-                  itemCount: terms.length,
+                  itemCount: terms.isEmpty ? (dream != null ? 1 : 0) : terms.length + (dream != null ? 1 : 0),
                   itemBuilder: (context, i) {
+                    // If there are terms, last item is memo editor; if none, show empty text then memo.
+                    final hasDream = dream != null;
+                    if (terms.isEmpty) {
+                      if (hasDream && i == 0) {
+                        return Column(
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.all(12.0),
+                              child: Text('Termはありません'),
+                            ),
+                            MemoEditor(type: 'dream', id: dreamId),
+                          ],
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    }
+                    final isMemo = hasDream && i == terms.length;
+                    if (isMemo) {
+                      return MemoEditor(type: 'dream', id: dreamId);
+                    }
                     final t = terms[i];
                     final count = tasks.where((x) => x.shortTermId == t.id).length;
                     return Card(

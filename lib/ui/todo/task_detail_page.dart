@@ -225,7 +225,6 @@ class TaskDetailPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              MemoEditor(type: 'task', id: task.id),
               FutureBuilder<(ShortTerm?, LongTerm?, Dream?, List<Tag>)>(
                 future: loadChain(task),
                 builder: (context, snapshot) {
@@ -303,6 +302,7 @@ class TaskDetailPage extends ConsumerWidget {
                   ),
                 ),
               ),
+              MemoEditor(type: 'task', id: task.id),
             ],
           );
         },
