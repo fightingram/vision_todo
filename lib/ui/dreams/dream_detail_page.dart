@@ -7,6 +7,9 @@ import '../../models/task.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/task_providers.dart';
 
+final _includeArchivedProvider =
+    StateProvider.autoDispose.family<bool, int>((ref, dreamId) => false);
+
 class DreamDetailPage extends ConsumerWidget {
   const DreamDetailPage({super.key, required this.dreamId, required this.initialTitle});
   final int dreamId;
@@ -16,7 +19,9 @@ class DreamDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dreams = ref.watch(dreamsProvider).value ?? const <Dream>[];
     final dream = dreams.where((d) => d.id == dreamId).cast<Dream?>().firstOrNull;
-    final termsAsync = ref.watch(termsByDreamProvider(dreamId));
+    final includeArchived = ref.watch(_includeArchivedProvider(dreamId));
+    final termsAsync =
+        ref.watch(termsByDreamWithArchivedProvider((dreamId, includeArchived)));
     final tasks = ref.watch(tasksStreamProvider).value ?? const <Task>[];
 
     String priorityLabel(int p) {
@@ -54,6 +59,32 @@ class DreamDetailPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text(dream?.title ?? initialTitle),
         actions: [
+          IconButton(
+            tooltip: 'タイトルを編集',
+            icon: const Icon(Icons.edit),
+            onPressed: dream == null
+                ? null
+                : () async {
+                    final newTitle = await _askTitle(
+                      context,
+                      'タイトルを編集',
+                      initial: dream.title,
+                      okLabel: '保存',
+                    );
+                    if (newTitle == null || newTitle.isEmpty || newTitle == dream.title) return;
+                    final updated = Dream(
+                      id: dream.id,
+                      title: newTitle,
+                      priority: dream.priority,
+                      dueAt: dream.dueAt,
+                      color: dream.color,
+                      archived: dream.archived,
+                    )
+                      ..createdAt = dream.createdAt
+                      ..updatedAt = DateTime.now();
+                    await ref.read(dreamRepoProvider).put(updated);
+                  },
+          ),
           IconButton(
             tooltip: 'Termを追加',
             icon: const Icon(Icons.add),
@@ -112,23 +143,25 @@ class DreamDetailPage extends ConsumerWidget {
                     Row(
                       children: [
                         OutlinedButton.icon(
-                          icon: const Icon(Icons.emoji_events_outlined),
-                          label: Text(dream.archived ? '達成済み' : '達成'),
-                          onPressed: dream.archived
-                              ? null
-                              : () async {
-                                  final updated = Dream(
-                                    id: dream.id,
-                                    title: dream.title,
-                                    priority: dream.priority,
-                                    dueAt: dream.dueAt,
-                                    color: dream.color,
-                                    archived: true,
-                                  )
-                                    ..createdAt = dream.createdAt
-                                    ..updatedAt = DateTime.now();
-                                  await ref.read(dreamRepoProvider).put(updated);
-                                },
+                          icon: Icon(
+                            dream.archived
+                                ? Icons.undo
+                                : Icons.emoji_events_outlined,
+                          ),
+                          label: Text(dream.archived ? '未達成に戻す' : '達成'),
+                          onPressed: () async {
+                            final updated = Dream(
+                              id: dream.id,
+                              title: dream.title,
+                              priority: dream.priority,
+                              dueAt: dream.dueAt,
+                              color: dream.color,
+                              archived: !dream.archived,
+                            )
+                              ..createdAt = dream.createdAt
+                              ..updatedAt = DateTime.now();
+                            await ref.read(dreamRepoProvider).put(updated);
+                          },
                         ),
                       ],
                     ),
@@ -172,6 +205,19 @@ class DreamDetailPage extends ConsumerWidget {
                 ),
               ),
             ),
+          // Filter row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                label: const Text('達成済みも表示'),
+                selected: includeArchived,
+                onSelected: (v) =>
+                    ref.read(_includeArchivedProvider(dreamId).notifier).state = v,
+              ),
+            ),
+          ),
           Expanded(
             child: termsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -191,6 +237,14 @@ class DreamDetailPage extends ConsumerWidget {
                         leading: const Icon(Icons.flag_outlined),
                         title: Text(t.title),
                         subtitle: Text('TODO ${count} 件'),
+                        trailing: t.archived
+                            ? Chip(
+                                label: const Text('達成済み'),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              )
+                            : null,
                         onTap: () {
                           // Navigate to Term detail (TODO list)
                           context.push('/todo/term/${t.id}', extra: t.title);
@@ -212,8 +266,8 @@ extension _IterableX<E> on Iterable<E> {
   E? get firstOrNull => isEmpty ? null : first;
 }
 
-Future<String?> _askTitle(BuildContext context, String title) async {
-  final controller = TextEditingController();
+Future<String?> _askTitle(BuildContext context, String title, {String? initial, String okLabel = '追加'}) async {
+  final controller = TextEditingController(text: initial ?? '');
   return showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
@@ -224,7 +278,7 @@ Future<String?> _askTitle(BuildContext context, String title) async {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('追加')),
+        FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: Text(okLabel)),
       ],
     ),
   );

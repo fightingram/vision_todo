@@ -56,6 +56,33 @@ class TermTodoPage extends ConsumerWidget {
         title: Text(termWithTags.asData?.value?.item.title ?? termTitle),
         actions: [
           IconButton(
+            tooltip: 'タイトルを編集',
+            icon: const Icon(Icons.edit),
+            onPressed: () async {
+              final gwt = termWithTags.asData?.value;
+              final item = gwt?.item;
+              if (item == null) return;
+              final newTitle = await _askTitle(
+                context,
+                'タイトルを編集',
+                initial: item.title,
+                okLabel: '保存',
+              );
+              if (newTitle == null || newTitle.isEmpty || newTitle == item.title) return;
+              final updated = Term(
+                id: item.id,
+                title: newTitle,
+                parentId: item.parentId,
+                dreamId: item.dreamId,
+                priority: item.priority,
+                dueAt: item.dueAt,
+                archived: item.archived,
+                color: item.color,
+              );
+              await ref.read(termRepoProvider).updateTerm(updated, gwt?.tags ?? const []);
+            },
+          ),
+          IconButton(
             tooltip: 'TODOを追加',
             icon: const Icon(Icons.add_task),
             onPressed: () async {
@@ -160,13 +187,15 @@ class TermTodoPage extends ConsumerWidget {
                       Row(
                         children: [
                           OutlinedButton.icon(
-                            icon: const Icon(Icons.emoji_events_outlined),
-                            label: Text(item.archived ? '達成済み' : '達成'),
-                            onPressed: item.archived
-                                ? null
-                                : () async {
-                                    await ref.read(termRepoProvider).archiveTerm(item, archived: true);
-                                  },
+                            icon: Icon(item.archived
+                                ? Icons.undo
+                                : Icons.emoji_events_outlined),
+                            label: Text(item.archived ? '未達成に戻す' : '達成'),
+                            onPressed: () async {
+                              await ref
+                                  .read(termRepoProvider)
+                                  .archiveTerm(item, archived: !item.archived);
+                            },
                           ),
                         ],
                       ),
@@ -281,8 +310,8 @@ class TermTodoPage extends ConsumerWidget {
   }
 }
 
-Future<String?> _askTitle(BuildContext context, String title) async {
-  final controller = TextEditingController();
+Future<String?> _askTitle(BuildContext context, String title, {String? initial, String okLabel = '追加'}) async {
+  final controller = TextEditingController(text: initial ?? '');
   return showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
@@ -299,7 +328,7 @@ Future<String?> _askTitle(BuildContext context, String title) async {
             child: const Text('キャンセル')),
         FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('追加')),
+            child: Text(okLabel)),
       ],
     ),
   );

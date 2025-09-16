@@ -6,6 +6,7 @@ import '../../models/short_term.dart';
 import '../../models/long_term.dart';
 import '../../models/dream.dart';
 import '../../providers/db_provider.dart';
+import '../../models/tag.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
 import '../../utils/date_utils.dart' as du;
@@ -108,28 +109,99 @@ class _TriageCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isar = ref.read(isarServiceProvider).isar;
 
-    Future<(ShortTerm?, LongTerm?, Dream?)> loadChain() async {
+    Future<(ShortTerm?, LongTerm?, Dream?, List<Tag>)> loadChain() async {
       ShortTerm? st;
       LongTerm? lt;
       Dream? dr;
-      if (task.shortTermId != null) {
-        st = await isar.shortTerms.get(task.shortTermId!);
-        if (st?.longTermId != null) {
-          lt = await isar.longTerms.get(st!.longTermId!);
-          if (lt?.dreamId != null) {
-            dr = await isar.dreams.get(lt!.dreamId!);
+      List<Tag> tags = const [];
+      final id = task.shortTermId;
+      if (id != null) {
+        // First, try interpreting as ShortTerm id
+        st = await isar.shortTerms.get(id);
+        if (st != null) {
+          await st.tags.load();
+          tags = st.tags.toList();
+          if (st.longTermId != null) {
+            lt = await isar.longTerms.get(st.longTermId!);
+            if (lt?.dreamId != null) {
+              dr = await isar.dreams.get(lt!.dreamId!);
+            }
+          }
+        } else {
+          // Fallback: interpret as LongTerm id
+          lt = await isar.longTerms.get(id);
+          if (lt != null) {
+            await lt.tags.load();
+            tags = lt.tags.toList();
+            if (lt.dreamId != null) {
+              dr = await isar.dreams.get(lt.dreamId!);
+            }
           }
         }
       }
-      return (st, lt, dr);
+      return (st, lt, dr, tags);
     }
 
-    return FutureBuilder<(ShortTerm?, LongTerm?, Dream?)>(
+    String statusLabel(TaskStatus s) {
+      switch (s) {
+        case TaskStatus.todo:
+          return '未着手';
+        case TaskStatus.doing:
+          return '進行中';
+        case TaskStatus.done:
+          return '完了';
+      }
+    }
+
+    Color statusColor(TaskStatus s, BuildContext context) {
+      switch (s) {
+        case TaskStatus.todo:
+          return Theme.of(context).disabledColor;
+        case TaskStatus.doing:
+          return Colors.blue;
+        case TaskStatus.done:
+          return Colors.green;
+      }
+    }
+
+    String dueLabel(DateTime? d) {
+      if (d == null) return 'なし';
+      return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+    }
+
+    String priorityLabel(int p) {
+      switch (p) {
+        case 3:
+          return '最優先';
+        case 2:
+          return '高';
+        case 1:
+          return '中';
+        default:
+          return '低';
+      }
+    }
+
+    Color priorityColor(int p, BuildContext context) {
+      switch (p) {
+        case 3:
+          return Colors.red;
+        case 2:
+          return Colors.orange;
+        case 1:
+          return Colors.blue;
+        default:
+          return Theme.of(context).disabledColor;
+      }
+    }
+
+    return FutureBuilder<(ShortTerm?, LongTerm?, Dream?, List<Tag>)>(
       future: loadChain(),
       builder: (context, snapshot) {
         final st = snapshot.data?.$1;
         final lt = snapshot.data?.$2;
         final dr = snapshot.data?.$3;
+        final tags = snapshot.data?.$4 ?? const <Tag>[];
         return Card(
           elevation: 3,
           child: Padding(
@@ -153,10 +225,63 @@ class _TriageCard extends ConsumerWidget {
                   ],
                   const SizedBox(height: 8),
                 ],
-                if (task.dueAt != null)
-                  Row(children: [const Icon(Icons.event, size: 16), const SizedBox(width: 6), Text('期限: ${task.dueAt!.month}/${task.dueAt!.day}')]),
-                const SizedBox(height: 8),
-                Row(children: [const Icon(Icons.priority_high_outlined, size: 16), const SizedBox(width: 6), Text('優先度: ${task.priority}')]),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Chip(
+                      label: Text(statusLabel(task.status)),
+                      backgroundColor: statusColor(task.status, context).withOpacity(0.1),
+                      side: BorderSide(color: statusColor(task.status, context).withOpacity(0.3)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: priorityColor(task.priority, context).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: priorityColor(task.priority, context).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.flag, size: 16, color: priorityColor(task.priority, context)),
+                          const SizedBox(width: 6),
+                          Text('優先度: ${priorityLabel(task.priority)}'),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.event, size: 16),
+                          const SizedBox(width: 6),
+                          Text('期限: ${dueLabel(task.dueAt)}'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: tags
+                        .map((t) => Chip(
+                              label: Text(t.name),
+                              backgroundColor: Color(t.color).withOpacity(0.15),
+                              side: BorderSide(color: Color(t.color).withOpacity(0.4)),
+                            ))
+                        .toList(),
+                  ),
+                ],
               ],
             ),
           ),

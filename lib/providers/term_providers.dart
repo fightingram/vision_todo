@@ -36,6 +36,15 @@ final termsByDreamProvider =
   return ref.read(termRepoProvider).watchByDream(dreamId);
 });
 
+// Terms under a Dream with option to include archived
+final termsByDreamWithArchivedProvider =
+    StreamProvider.autoDispose.family<List<Term>, (int?, bool)>((ref, args) {
+  final (dreamId, includeArchived) = args;
+  return ref
+      .read(termRepoProvider)
+      .watchByDream(dreamId, includeArchived: includeArchived);
+});
+
 final termsByParentProvider =
     StreamProvider.autoDispose.family<List<Term>, int>((ref, parentId) {
   return ref.read(termRepoProvider).watchChildren(parentId);

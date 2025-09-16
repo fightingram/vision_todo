@@ -3,6 +3,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/task.dart';
 import '../../providers/task_providers.dart';
+import '../../providers/db_provider.dart';
+import '../../models/short_term.dart';
+import '../../models/long_term.dart';
+import '../../models/dream.dart';
+import '../../models/tag.dart';
 
 class TaskDetailPage extends ConsumerWidget {
   const TaskDetailPage({super.key, required this.taskId, this.initialTitle});
@@ -66,6 +71,7 @@ class TaskDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final taskStream = ref.watch(taskByIdProvider(taskId));
     final repo = ref.read(taskRepoProvider);
+    final isar = ref.read(isarServiceProvider).isar;
 
     return Scaffold(
       appBar: AppBar(
@@ -108,6 +114,39 @@ class TaskDetailPage extends ConsumerWidget {
           if (task == null) {
             return const Center(child: Text('TODOが見つかりません'));
           }
+          Future<(ShortTerm?, LongTerm?, Dream?, List<Tag>)> loadChain(Task task) async {
+            ShortTerm? st;
+            LongTerm? lt;
+            Dream? dr;
+            List<Tag> tags = const [];
+            final id = task.shortTermId;
+            if (id != null) {
+              // Try as ShortTerm first
+              st = await isar.shortTerms.get(id);
+              if (st != null) {
+                await st.tags.load();
+                tags = st.tags.toList();
+                if (st.longTermId != null) {
+                  lt = await isar.longTerms.get(st.longTermId!);
+                  if (lt?.dreamId != null) {
+                    dr = await isar.dreams.get(lt!.dreamId!);
+                  }
+                }
+              } else {
+                // Fallback: treat as LongTerm id
+                lt = await isar.longTerms.get(id);
+                if (lt != null) {
+                  await lt.tags.load();
+                  tags = lt.tags.toList();
+                  if (lt.dreamId != null) {
+                    dr = await isar.dreams.get(lt.dreamId!);
+                  }
+                }
+              }
+            }
+            return (st, lt, dr, tags);
+          }
+
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
@@ -183,6 +222,52 @@ class TaskDetailPage extends ConsumerWidget {
                     ],
                   ),
                 ),
+              ),
+              FutureBuilder<(ShortTerm?, LongTerm?, Dream?, List<Tag>)>(
+                future: loadChain(task),
+                builder: (context, snapshot) {
+                  final st = snapshot.data?.$1;
+                  final lt = snapshot.data?.$2;
+                  final dr = snapshot.data?.$3;
+                  final tags = snapshot.data?.$4 ?? const <Tag>[];
+                  if (st == null && lt == null && dr == null && tags.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (dr != null)
+                            Row(children: [const Icon(Icons.lightbulb_outline, size: 16), const SizedBox(width: 6), Flexible(child: Text('夢: ${dr.title}'))]),
+                          if (lt != null) ...[
+                            const SizedBox(height: 6),
+                            Row(children: [const Icon(Icons.emoji_flags_outlined, size: 16), const SizedBox(width: 6), Flexible(child: Text('長期目標: ${lt.title}'))]),
+                          ],
+                          if (st != null) ...[
+                            const SizedBox(height: 6),
+                            Row(children: [const Icon(Icons.flag_outlined, size: 16), const SizedBox(width: 6), Flexible(child: Text('短期目標: ${st.title}'))]),
+                          ],
+                          if (tags.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: tags
+                                  .map((t) => Chip(
+                                        label: Text(t.name),
+                                        backgroundColor: Color(t.color).withOpacity(0.15),
+                                        side: BorderSide(color: Color(t.color).withOpacity(0.4)),
+                                      ))
+                                  .toList(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
               Card(
                 child: ListTile(
@@ -346,4 +431,3 @@ class _EditTaskDialogState extends State<_EditTaskDialog> {
     );
   }
 }
-
