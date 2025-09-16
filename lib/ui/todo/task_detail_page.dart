@@ -8,6 +8,7 @@ import '../../models/short_term.dart';
 import '../../models/long_term.dart';
 import '../../models/dream.dart';
 import '../../models/tag.dart';
+import 'package:go_router/go_router.dart';
 import '../widgets/memo_editor.dart';
 
 class TaskDetailPage extends ConsumerWidget {
@@ -242,14 +243,23 @@ class TaskDetailPage extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (dr != null)
-                            Row(children: [const Icon(Icons.lightbulb_outline, size: 16), const SizedBox(width: 6), Flexible(child: Text('夢: ${dr.title}'))]),
+                            InkWell(
+                              onTap: () => context.push('/maps/dream/${dr.id}', extra: dr.title),
+                              child: Row(children: [const Icon(Icons.lightbulb_outline, size: 16), const SizedBox(width: 6), Flexible(child: Text('夢: ${dr.title}'))]),
+                            ),
                           if (lt != null) ...[
                             const SizedBox(height: 6),
-                            Row(children: [const Icon(Icons.emoji_flags_outlined, size: 16), const SizedBox(width: 6), Flexible(child: Text('長期目標: ${lt.title}'))]),
+                            InkWell(
+                              onTap: () => context.push('/todo/term/${lt.id}', extra: lt.title),
+                              child: Row(children: [const Icon(Icons.emoji_flags_outlined, size: 16), const SizedBox(width: 6), Flexible(child: Text('長期目標: ${lt.title}'))]),
+                            ),
                           ],
                           if (st != null) ...[
                             const SizedBox(height: 6),
-                            Row(children: [const Icon(Icons.flag_outlined, size: 16), const SizedBox(width: 6), Flexible(child: Text('短期目標: ${st.title}'))]),
+                            InkWell(
+                              onTap: () => context.push('/todo/term/${st.id}', extra: st.title),
+                              child: Row(children: [const Icon(Icons.flag_outlined, size: 16), const SizedBox(width: 6), Flexible(child: Text('短期目標: ${st.title}'))]),
+                            ),
                           ],
                           if (tags.isNotEmpty) ...[
                             const SizedBox(height: 10),

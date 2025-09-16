@@ -7,6 +7,7 @@ import '../../repositories/term_repositories.dart';
 import '../../providers/task_providers.dart';
 import '../../providers/term_providers.dart';
 import '../widgets/task_tile.dart';
+import 'package:go_router/go_router.dart';
 import '../widgets/memo_editor.dart';
 
 class TermTodoPage extends ConsumerWidget {
@@ -174,13 +175,16 @@ class TermTodoPage extends ConsumerWidget {
                             if (d == null) return const SizedBox.shrink();
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.bedtime_outlined, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text('夢: ${d.title}'),
-                                ],
+                              child: InkWell(
+                                onTap: () => context.push('/maps/dream/${d.id}', extra: d.title),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.bedtime_outlined, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text('夢: ${d.title}'),
+                                  ],
+                                ),
                               ),
                             );
                           },
