@@ -10,6 +10,7 @@ import '../../models/tag.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
 import '../../utils/date_utils.dart' as du;
+import '../../providers/triage_provider.dart';
 
 class TriagePage extends ConsumerStatefulWidget {
   const TriagePage({super.key});
@@ -45,7 +46,19 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('今週の仕分け')),
+      appBar: AppBar(
+        title: const Text('今週の仕分け'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // Skip for this week's session: suppress auto-open for current week
+              ref.read(triageSkipWeekProvider.notifier).state = weekStart;
+              Navigator.of(context).pop();
+            },
+            child: const Text('スキップ'),
+          )
+        ],
+      ),
       body: _queue.isEmpty
           ? const Center(child: Text('今週の仕分けは完了しました'))
           : Padding(

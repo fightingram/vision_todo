@@ -13,6 +13,7 @@ import 'ui/triage/triage_page.dart';
 import 'providers/task_providers.dart';
 import 'providers/db_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/triage_provider.dart';
 import 'utils/date_utils.dart' as du;
 import 'models/task.dart';
 
@@ -123,7 +124,9 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
           final ws = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
           _lastHandledWeekStart = ws;
           _lastKnownTriageCount = items.length;
-          if (mounted && items.isNotEmpty) {
+          final skipWeek = ref.read(triageSkipWeekProvider);
+          final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, ws);
+          if (mounted && items.isNotEmpty && !shouldSkip) {
             _triagePushInProgress = true;
             _router.push('/triage').whenComplete(() {
               _triagePushInProgress = false;
@@ -148,7 +151,9 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       final nextLen = (next?.length ?? 0);
       final increased = nextLen > prevLen;
       // 既にトリアージ画面、または遷移中なら何もしない
-      if (increased && nextLen > 0 && !_triagePushInProgress) {
+      final skipWeek = ref.read(triageSkipWeekProvider);
+      final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, currentWeek);
+      if (increased && nextLen > 0 && !_triagePushInProgress && !shouldSkip) {
         final loc = _router.routeInformationProvider.value.location ?? '';
         if (!loc.startsWith('/triage') && mounted) {
           _triagePushInProgress = true;
@@ -182,6 +187,7 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
         if (loc.startsWith('/triage')) return;
         final items = ref.read(triageTasksProvider);
         _lastKnownTriageCount = items.length; // 新しい週の基準を更新
+        // New week: skip flag naturally does not match this week, so ignore it
         if (items.isNotEmpty && mounted) {
           // 現在の画面の上に仕分けを表示
           _triagePushInProgress = true;
@@ -194,7 +200,9 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
         final items = ref.read(triageTasksProvider);
         final nextLen = items.length;
         final increased = nextLen > _lastKnownTriageCount;
-        if (increased && nextLen > 0 && !_triagePushInProgress) {
+        final skipWeek = ref.read(triageSkipWeekProvider);
+        final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, weekStartNow);
+        if (increased && nextLen > 0 && !_triagePushInProgress && !shouldSkip) {
           final loc = _router.routeInformationProvider.value.location ?? '';
           if (!loc.startsWith('/triage') && mounted) {
             _triagePushInProgress = true;
