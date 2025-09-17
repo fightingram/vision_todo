@@ -94,18 +94,32 @@ class TaskDetailPage extends ConsumerWidget {
               }
             },
           ),
-          PopupMenuButton<String>(
-            onSelected: (v) async {
+          IconButton(
+            tooltip: '削除',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
               final task = taskStream.asData?.value;
               if (task == null) return;
-              if (v == 'delete') {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('削除確認'),
+                  content: const Text('このTODOを削除しますか？この操作は元に戻せません。'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('キャンセル')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('削除')),
+                  ],
+                ),
+              );
+              if (ok == true) {
                 await repo.delete(task.id);
                 if (context.mounted) Navigator.of(context).pop();
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'delete', child: Text('削除')),
-            ],
           ),
         ],
       ),

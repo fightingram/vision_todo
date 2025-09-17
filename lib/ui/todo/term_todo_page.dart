@@ -54,6 +54,17 @@ class TermTodoPage extends ConsumerWidget {
       return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
     }
 
+    String statusLabel(TaskStatus s) {
+      switch (s) {
+        case TaskStatus.todo:
+          return '未着手';
+        case TaskStatus.doing:
+          return '進行中';
+        case TaskStatus.done:
+          return '完了';
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detail'),
@@ -117,37 +128,34 @@ class TermTodoPage extends ConsumerWidget {
               );
             },
           ),
-          PopupMenuButton<String>(
-            onSelected: (v) async {
-              if (v == 'delete') {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('削除確認'),
-                    content: const Text('この目標を削除しますか？この操作は元に戻せません。'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('キャンセル')),
-                      FilledButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('削除')),
-                    ],
-                  ),
-                );
-                if (ok == true) {
-                  final termRepo = ref.read(termRepoProvider);
-                  final t = await termRepo.getById(termId);
-                  if (t != null) {
-                    await termRepo.deleteTerm(t);
-                    if (context.mounted) Navigator.of(context).pop();
-                  }
+          IconButton(
+            tooltip: '削除',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('削除確認'),
+                  content: const Text('この目標を削除しますか？この操作は元に戻せません。'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('キャンセル')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('削除')),
+                  ],
+                ),
+              );
+              if (ok == true) {
+                final termRepo = ref.read(termRepoProvider);
+                final t = await termRepo.getById(termId);
+                if (t != null) {
+                  await termRepo.deleteTerm(t);
+                  if (context.mounted) Navigator.of(context).pop();
                 }
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'delete', child: Text('削除')),
-            ],
           ),
         ],
       ),
@@ -160,7 +168,8 @@ class TermTodoPage extends ConsumerWidget {
           }
           final item = gwt.item;
           final tags = gwt.tags;
-          return Column(
+          return SingleChildScrollView(
+            child: Column(
             children: [
               // Header: term details
               Card(
@@ -281,54 +290,147 @@ class TermTodoPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              Expanded(
-                child: shortsAsync.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('読み込みエラー: $e')),
-                  data: (shorts) {
-                    // このTerm直下と子Term直下の両方を表示対象にする
-                    final shortIds = shorts.map((s) => s.id).toSet()
-                      ..add(termId);
-                    final tasks =
-                        ref.watch(tasksStreamProvider).value ?? const <Task>[];
-                    final items = tasks
-                        .where((t) =>
-                            t.shortTermId != null &&
-                            shortIds.contains(t.shortTermId))
-                        .toList();
-                    final children = <Widget>[];
-                    if (items.isEmpty) {
-                      children.add(const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: Center(child: Text('TODOはありません')),
-                      ));
-                    } else {
-                      children.addAll(items.map((t) => Card(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+              // Filters: Status / Priority
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: _TermFilters(termId: termId, statusLabel: statusLabel, priorityLabel: priorityLabel),
+              ),
+              // Tasks and memo scroll with header/filters
+              shortsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Center(child: Text('読み込みエラー: $e')),
+                ),
+                data: (shorts) {
+                  final shortIds = shorts.map((s) => s.id).toSet()..add(termId);
+                  final tasks = ref.watch(allTasksStreamProvider).value ?? const <Task>[];
+                  var items = tasks
+                      .where((t) => t.shortTermId != null && shortIds.contains(t.shortTermId))
+                      .toList();
+                  // Apply filters
+                  final statuses = ref.watch(_statusFilterProvider(termId));
+                  final priorities = ref.watch(_priorityFilterProvider(termId));
+                  if (statuses.isEmpty) {
+                    items = items.where((t) => t.status != TaskStatus.done).toList();
+                  } else {
+                    items = items.where((t) => statuses.contains(t.status)).toList();
+                  }
+                  if (priorities.isNotEmpty) {
+                    items = items.where((t) => priorities.contains(t.priority)).toList();
+                  }
+
+                  if (items.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: Center(child: Text('TODOはありません')),
+                    );
+                  }
+                  return Column(
+                    children: [
+                      ...items.map((t) => Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             child: TaskTile(
                               task: t,
                               showCheckbox: false,
                               showEditMenu: false,
                             ),
-                          )));
-                    }
-                    children.add(MemoEditor(type: 'term', id: termId));
-                    return ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
-                      children: children,
-                    );
-                  },
-                ),
+                          )),
+                      MemoEditor(type: 'term', id: termId),
+                    ],
+                  );
+                },
               ),
             ],
+          ),
           );
         },
       ),
     );
   }
 }
+
+class _TermFilters extends ConsumerWidget {
+  const _TermFilters({required this.termId, required this.statusLabel, required this.priorityLabel});
+  final int termId;
+  final String Function(TaskStatus) statusLabel;
+  final String Function(int) priorityLabel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statuses = ref.watch(_statusFilterProvider(termId));
+    final priorities = ref.watch(_priorityFilterProvider(termId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: -8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('ステータス:'),
+            ...[TaskStatus.todo, TaskStatus.doing, TaskStatus.done].map(
+              (s) => FilterChip(
+                label: Text(statusLabel(s)),
+                selected: statuses.contains(s),
+                onSelected: (v) {
+                  final next = {...statuses};
+                  if (v) {
+                    next.add(s);
+                  } else {
+                    next.remove(s);
+                  }
+                  ref.read(_statusFilterProvider(termId).notifier).state = next;
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: -8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('優先度:'),
+            ...[0, 1, 2, 3].map(
+              (p) => FilterChip(
+                label: Text(priorityLabel(p)),
+                selected: priorities.contains(p),
+                onSelected: (v) {
+                  final next = {...priorities};
+                  if (v) {
+                    next.add(p);
+                  } else {
+                    next.remove(p);
+                  }
+                  ref.read(_priorityFilterProvider(termId).notifier).state = next;
+                },
+              ),
+            ),
+            if (statuses.isNotEmpty || priorities.isNotEmpty)
+              TextButton(
+                onPressed: () {
+                  ref.read(_statusFilterProvider(termId).notifier).state = {};
+                  ref.read(_priorityFilterProvider(termId).notifier).state = {};
+                },
+                child: const Text('フィルター解除'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// Per-term filter state
+final _statusFilterProvider =
+    StateProvider.autoDispose.family<Set<TaskStatus>, int>((ref, termId) => {});
+final _priorityFilterProvider =
+    StateProvider.autoDispose.family<Set<int>, int>((ref, termId) => {});
 
 Future<String?> _askTitle(BuildContext context, String title, {String? initial, String okLabel = '追加'}) async {
   final controller = TextEditingController(text: initial ?? '');

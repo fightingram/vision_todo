@@ -108,12 +108,20 @@ ThemeData buildLightTheme() {
       elevation: 3,
       shape: CircleBorder(),
     ),
-    navigationBarTheme: const NavigationBarThemeData(
+    navigationBarTheme: NavigationBarThemeData(
       backgroundColor: DT.bgSurface,
       surfaceTintColor: Colors.transparent,
       indicatorColor: DT.brandPrimary,
-      iconTheme: WidgetStatePropertyAll(IconThemeData(color: DT.textSecondary)),
-      labelTextStyle: WidgetStatePropertyAll(TextStyle(color: DT.textSecondary)),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(
+          color: states.contains(WidgetState.selected)
+              ? DT.textInverse
+              : DT.textSecondary,
+        ),
+      ),
+      labelTextStyle: const WidgetStatePropertyAll(
+        TextStyle(color: DT.textSecondary),
+      ),
     ),
     listTileTheme: const ListTileThemeData(
       iconColor: DT.textSecondary,
