@@ -224,16 +224,21 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       title: 'Vision TODO',
       theme: buildLightTheme(),
       builder: (context, child) {
-        // Dismiss keyboard when tapping outside of inputs anywhere in the app
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            final currentFocus = FocusScope.of(context);
-            if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
-              currentFocus.unfocus();
-            }
-          },
-          child: child,
+        // Clamp system font scaling for consistent UI and dismiss keyboard on tap-out
+        final mq = MediaQuery.of(context);
+        final clamped = mq.textScaler.clamp(minScaleFactor: 1.0, maxScaleFactor: 1.15);
+        return MediaQuery(
+          data: mq.copyWith(textScaler: clamped),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              final currentFocus = FocusScope.of(context);
+              if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+                currentFocus.unfocus();
+              }
+            },
+            child: child,
+          ),
         );
       },
       routerConfig: _router,

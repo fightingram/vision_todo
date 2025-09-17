@@ -77,7 +77,7 @@ class TaskDetailPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(taskStream.asData?.value?.title ?? initialTitle ?? 'TODO'),
+        title: const Text('Detail'),
         actions: [
           IconButton(
             tooltip: '編集',

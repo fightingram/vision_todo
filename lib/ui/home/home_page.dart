@@ -16,7 +16,6 @@ import '../../repositories/term_repositories.dart';
 import '../widgets/gradient_card.dart';
 import '../theme/design_tokens.dart';
 
-
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -37,12 +36,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     final settings = ref.watch(settingsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ホーム'),
+        title: const Text('Dream TODO'),
         actions: [
           IconButton(
             tooltip: settings.showCompleted ? '未完了のみ' : '完了も表示',
-            onPressed: () => ref.read(settingsProvider.notifier).toggleShowCompleted(),
-            icon: Icon(settings.showCompleted ? Icons.checklist : Icons.checklist_rtl),
+            onPressed: () =>
+                ref.read(settingsProvider.notifier).toggleShowCompleted(),
+            icon: Icon(
+                settings.showCompleted ? Icons.checklist : Icons.checklist_rtl),
           ),
         ],
       ),
@@ -59,15 +60,20 @@ class _HomePageState extends ConsumerState<HomePage> {
         data: (_) => LayoutBuilder(
           builder: (context, constraints) {
             final tasks = ref.watch(tasksStreamProvider).value ?? const [];
-            final weekStart = du.startOfWeek(DateTime.now(), settings.weekStart);
+            final weekStart =
+                du.startOfWeek(DateTime.now(), settings.weekStart);
             final thisWeek = tasks
-                .where((t) => t.plannedWeekStart != null && du.isSameDate(t.plannedWeekStart!, weekStart))
+                .where((t) =>
+                    t.plannedWeekStart != null &&
+                    du.isSameDate(t.plannedWeekStart!, weekStart))
                 .toList()
               ..sort((a, b) {
                 final byPriority = b.priority.compareTo(a.priority);
                 if (byPriority != 0) return byPriority;
-                final ad = a.dueAt ?? DateTime.fromMillisecondsSinceEpoch(8640000000000000);
-                final bd = b.dueAt ?? DateTime.fromMillisecondsSinceEpoch(8640000000000000);
+                final ad = a.dueAt ??
+                    DateTime.fromMillisecondsSinceEpoch(8640000000000000);
+                final bd = b.dueAt ??
+                    DateTime.fromMillisecondsSinceEpoch(8640000000000000);
                 final byDue = ad.compareTo(bd);
                 if (byDue != 0) return byDue;
                 return a.createdAt.compareTo(b.createdAt);
@@ -77,10 +83,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                 const _DreamsHeaderStrip(),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     children: [
                       _WeeklySection(
-                        title: '今週',
+                        title: 'this week',
                         tasks: thisWeek,
                         weekStart: weekStart,
                       ),
@@ -111,7 +118,7 @@ class _DreamsHeaderStrip extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
-          child: Text('夢', style: Theme.of(context).textTheme.titleMedium),
+          child: Text('Dream', style: Theme.of(context).textTheme.titleMedium),
         ),
         SizedBox(
           height: 120,
@@ -127,7 +134,8 @@ class _DreamsHeaderStrip extends ConsumerWidget {
                 title: d.title,
                 color: Color(d.color),
                 doneCount: count,
-                onTap: () => context.push('/maps/dream/${d.id}', extra: d.title),
+                onTap: () =>
+                    context.push('/maps/dream/${d.id}', extra: d.title),
               );
             },
           ),
@@ -138,7 +146,11 @@ class _DreamsHeaderStrip extends ConsumerWidget {
 }
 
 class _DreamCard extends StatelessWidget {
-  const _DreamCard({required this.title, required this.color, required this.doneCount, this.onTap});
+  const _DreamCard(
+      {required this.title,
+      required this.color,
+      required this.doneCount,
+      this.onTap});
   final String title;
   final Color color;
   final int doneCount;
@@ -151,18 +163,23 @@ class _DreamCard extends StatelessWidget {
     return SizedBox(
       width: 240,
       child: GradientCard(
-        gradient: LinearGradient(colors: grad, begin: Alignment.centerLeft, end: Alignment.centerRight),
+        gradient: LinearGradient(
+            colors: grad,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight),
         onTap: onTap,
         title: title,
         subtitle: '完了 TODO $doneCount件',
-        decoration: const Icon(Icons.auto_awesome, size: 32, color: Colors.white),
+        decoration:
+            const Icon(Icons.auto_awesome, size: 32, color: Colors.white),
       ),
     );
   }
 }
 
 class _WeeklySection extends ConsumerStatefulWidget {
-  const _WeeklySection({required this.title, required this.tasks, required this.weekStart});
+  const _WeeklySection(
+      {required this.title, required this.tasks, required this.weekStart});
   final String title;
   final List<Task> tasks;
   final DateTime weekStart;
@@ -185,7 +202,8 @@ class _WeeklySectionState extends ConsumerState<_WeeklySection> {
   @override
   void didUpdateWidget(covariant _WeeklySection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.weekStart != widget.weekStart || oldWidget.tasks != widget.tasks) {
+    if (oldWidget.weekStart != widget.weekStart ||
+        oldWidget.tasks != widget.tasks) {
       _loadOrder();
     }
   }
@@ -233,7 +251,8 @@ class _WeeklySectionState extends ConsumerState<_WeeklySection> {
         padding: const EdgeInsets.only(bottom: 8.0),
         child: Text('タスクはありません', style: Theme.of(context).textTheme.bodySmall),
       ));
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
+      return Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: sections);
     }
 
     final termIds = _loaded ? _termOrder : grouped.keys.toList();
@@ -250,7 +269,8 @@ class _WeeklySectionState extends ConsumerState<_WeeklySection> {
             final id = termIds.removeAt(oldIndex);
             termIds.insert(newIndex, id);
           });
-          final key = 'home_week_terms_${widget.weekStart.millisecondsSinceEpoch}';
+          final key =
+              'home_week_terms_${widget.weekStart.millisecondsSinceEpoch}';
           await ref.read(orderServiceProvider).setOrder(key, termIds);
           setState(() => _termOrder = List.of(termIds));
         },
@@ -259,28 +279,33 @@ class _WeeklySectionState extends ConsumerState<_WeeklySection> {
           final items = grouped[id] ?? const <Task>[];
           return Container(
             key: ValueKey('home_term_$id'),
-            child: _HomeTermTasksSection(termId: id, items: items, weekStart: widget.weekStart),
+            child: _HomeTermTasksSection(
+                termId: id, items: items, weekStart: widget.weekStart),
           );
         },
       ),
     );
 
     if (unlinked.isNotEmpty) {
-      sections.add(_HomeUnlinkedTasksSection(items: unlinked, weekStart: widget.weekStart));
+      sections.add(_HomeUnlinkedTasksSection(
+          items: unlinked, weekStart: widget.weekStart));
     }
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: sections);
   }
 }
 
 class _HomeTermTasksSection extends ConsumerStatefulWidget {
-  const _HomeTermTasksSection({required this.termId, required this.items, required this.weekStart});
+  const _HomeTermTasksSection(
+      {required this.termId, required this.items, required this.weekStart});
   final int termId;
   final List<Task> items;
   final DateTime weekStart;
 
   @override
-  ConsumerState<_HomeTermTasksSection> createState() => _HomeTermTasksSectionState();
+  ConsumerState<_HomeTermTasksSection> createState() =>
+      _HomeTermTasksSectionState();
 }
 
 class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
@@ -311,7 +336,8 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
   }
 
   Future<void> _loadOrder() async {
-    final key = 'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
+    final key =
+        'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
     final order = await ref.read(orderServiceProvider).getOrder(key);
     final map = {for (final t in _items) t.id: t};
     final ordered = <Task>[];
@@ -343,17 +369,23 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: InkWell(
-                        onTap: term == null ? null : () => context.push('/todo/term/${term.id}', extra: term.title),
+                        onTap: term == null
+                            ? null
+                            : () => context.push('/todo/term/${term.id}',
+                                extra: term.title),
                         child: Text(
                           title,
                           style: Theme.of(context)
                               .textTheme
                               .bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600, color: DT.textSecondary),
+                              ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: DT.textSecondary),
                         ),
                       ),
                     ),
-                    Text('TODO ${_items.length} 件', style: Theme.of(context).textTheme.bodySmall),
+                    Text('TODO ${_items.length} 件',
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -363,7 +395,8 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
                   // Hierarchical child container with left guide line and reorder (long-press)
                   Container(
                     decoration: const BoxDecoration(
-                      border: Border(left: BorderSide(color: DT.borderSubtle, width: 2)),
+                      border: Border(
+                          left: BorderSide(color: DT.borderSubtle, width: 2)),
                     ),
                     padding: const EdgeInsets.only(left: 12),
                     child: Column(
@@ -380,38 +413,47 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
                                 ),
                           ),
                           child: ReorderableListView.builder(
-                            key: ValueKey('home_term_top_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}'),
+                            key: ValueKey(
+                                'home_term_top_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}'),
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: top.length,
                             onReorder: (oldIndex, newIndex) async {
-                            setState(() {
-                              if (newIndex > oldIndex) newIndex -= 1;
-                              final item = top.removeAt(oldIndex);
-                              top.insert(newIndex, item);
-                              // reflect into full list: top first, then rest keeping order
-                              final rest = _items.where((e) => !top.contains(e)).toList();
-                              _items = [...top, ...rest];
-                            });
-                            final key = 'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
-                            await ref.read(orderServiceProvider).setOrder(
-                              key,
-                              _items.map((e) => e.id).toList(),
-                            );
-                          },
-                          itemBuilder: (context, i) => Align(
-                            key: ValueKey('home_term_top_item_${top[i].id}'),
-                            alignment: Alignment.centerLeft,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: ActionChip(
-                                label: Text(top[i].title, overflow: TextOverflow.ellipsis),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                              setState(() {
+                                if (newIndex > oldIndex) newIndex -= 1;
+                                final item = top.removeAt(oldIndex);
+                                top.insert(newIndex, item);
+                                // reflect into full list: top first, then rest keeping order
+                                final rest = _items
+                                    .where((e) => !top.contains(e))
+                                    .toList();
+                                _items = [...top, ...rest];
+                              });
+                              final key =
+                                  'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
+                              await ref.read(orderServiceProvider).setOrder(
+                                    key,
+                                    _items.map((e) => e.id).toList(),
+                                  );
+                            },
+                            itemBuilder: (context, i) => Align(
+                              key: ValueKey('home_term_top_item_${top[i].id}'),
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4.0),
+                                child: ActionChip(
+                                  label: Text(top[i].title,
+                                      overflow: TextOverflow.ellipsis),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  onPressed: () => context.push(
+                                      '/todo/task/${top[i].id}',
+                                      extra: top[i].title),
+                                ),
                               ),
                             ),
-                          ),
                           ),
                         ),
                         if (_items.length > top.length)
@@ -420,8 +462,12 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
                             child: ActionChip(
                               label: Text('すべて表示 (${_items.length})'),
                               visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              onPressed: term == null ? null : () => context.push('/todo/term/${term.id}', extra: term.title),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onPressed: term == null
+                                  ? null
+                                  : () => context.push('/todo/term/${term.id}',
+                                      extra: term.title),
                             ),
                           ),
                       ],
@@ -437,15 +483,18 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
 }
 
 class _HomeUnlinkedTasksSection extends ConsumerStatefulWidget {
-  const _HomeUnlinkedTasksSection({required this.items, required this.weekStart});
+  const _HomeUnlinkedTasksSection(
+      {required this.items, required this.weekStart});
   final List<Task> items;
   final DateTime weekStart;
 
   @override
-  ConsumerState<_HomeUnlinkedTasksSection> createState() => _HomeUnlinkedTasksSectionState();
+  ConsumerState<_HomeUnlinkedTasksSection> createState() =>
+      _HomeUnlinkedTasksSectionState();
 }
 
-class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSection> {
+class _HomeUnlinkedTasksSectionState
+    extends ConsumerState<_HomeUnlinkedTasksSection> {
   late List<Task> _items;
 
   @override
@@ -501,13 +550,12 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                 Expanded(
                   child: Text(
                     '紐付けなし',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600, color: DT.textSecondary),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600, color: DT.textSecondary),
                   ),
                 ),
-                Text('TODO ${_items.length} 件', style: Theme.of(context).textTheme.bodySmall),
+                Text('TODO ${_items.length} 件',
+                    style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
             const SizedBox(height: 8),
@@ -528,7 +576,8 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ReorderableListView.builder(
-                      key: ValueKey('home_unlinked_top_${widget.weekStart.millisecondsSinceEpoch}'),
+                      key: ValueKey(
+                          'home_unlinked_top_${widget.weekStart.millisecondsSinceEpoch}'),
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: top.length,
@@ -537,14 +586,16 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                           if (newIndex > oldIndex) newIndex -= 1;
                           final item = top.removeAt(oldIndex);
                           top.insert(newIndex, item);
-                          final rest = _items.where((e) => !top.contains(e)).toList();
+                          final rest =
+                              _items.where((e) => !top.contains(e)).toList();
                           _items = [...top, ...rest];
                         });
-                        final key = 'home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}';
+                        final key =
+                            'home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}';
                         await ref.read(orderServiceProvider).setOrder(
-                          key,
-                          _items.map((e) => e.id).toList(),
-                        );
+                              key,
+                              _items.map((e) => e.id).toList(),
+                            );
                       },
                       itemBuilder: (context, i) => Align(
                         key: ValueKey('home_unlinked_top_item_${top[i].id}'),
@@ -552,10 +603,14 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4.0),
                           child: ActionChip(
-                            label: Text(top[i].title, overflow: TextOverflow.ellipsis),
+                            label: Text(top[i].title,
+                                overflow: TextOverflow.ellipsis),
                             visualDensity: VisualDensity.compact,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            onPressed: () => context.push(
+                                '/todo/task/${top[i].id}',
+                                extra: top[i].title),
                           ),
                         ),
                       ),
@@ -566,7 +621,8 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                         child: ActionChip(
                           label: Text('すべて表示 (${_items.length})'),
                           visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                           onPressed: () => context.push('/todo'),
                         ),
                       ),

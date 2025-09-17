@@ -25,6 +25,7 @@ class MapsPage extends ConsumerWidget {
     final init = ref.watch(isarInitProvider);
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: const Text('Maps'),
         actions: [
           IconButton(

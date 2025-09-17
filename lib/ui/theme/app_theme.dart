@@ -37,12 +37,15 @@ ThemeData buildLightTheme() {
     onTertiaryContainer: DT.textInverse,
   );
 
+  // Tighter, more unified typography scale
   final textTheme = const TextTheme(
-    displayLarge: TextStyle(fontSize: 32, height: 38 / 32, fontWeight: FontWeight.w600, color: DT.textPrimary),
-    titleLarge: TextStyle(fontSize: 24, height: 30 / 24, fontWeight: FontWeight.w600, color: DT.textPrimary),
-    titleMedium: TextStyle(fontSize: 24, height: 30 / 24, fontWeight: FontWeight.w600, color: DT.textPrimary),
-    bodyMedium: TextStyle(fontSize: 16, height: 22 / 16, fontWeight: FontWeight.w400, color: DT.textPrimary),
-    bodySmall: TextStyle(fontSize: 13, height: 18 / 13, fontWeight: FontWeight.w400, color: DT.textSecondary),
+    // Page/section titles
+    displayLarge: TextStyle(fontSize: 24, height: 30 / 24, fontWeight: FontWeight.w600, color: DT.textPrimary),
+    titleLarge: TextStyle(fontSize: 20, height: 26 / 20, fontWeight: FontWeight.w600, color: DT.textPrimary),
+    titleMedium: TextStyle(fontSize: 18, height: 24 / 18, fontWeight: FontWeight.w600, color: DT.textPrimary),
+    // Body
+    bodyMedium: TextStyle(fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w400, color: DT.textPrimary),
+    bodySmall: TextStyle(fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w400, color: DT.textSecondary),
   );
 
   return ThemeData(

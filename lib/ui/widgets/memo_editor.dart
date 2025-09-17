@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../providers/memo_provider.dart';
+import '../theme/design_tokens.dart';
 
 class MemoEditor extends ConsumerStatefulWidget {
-  const MemoEditor({super.key, required this.type, required this.id, this.title = 'メモ'});
+  const MemoEditor(
+      {super.key, required this.type, required this.id, this.title = 'memo'});
   final String type; // 'dream' | 'term' | 'task'
   final int id;
   final String title;
@@ -43,7 +45,7 @@ class _MemoEditorState extends ConsumerState<MemoEditor> {
         ref.invalidate(memoTextProvider((widget.type, widget.id)));
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('メモを保存しました')),
+          const SnackBar(content: Text('memoを保存しました')),
         );
       }
     }
@@ -59,7 +61,8 @@ class _MemoEditorState extends ConsumerState<MemoEditor> {
               children: [
                 const Icon(Icons.sticky_note_2_outlined, size: 18),
                 const SizedBox(width: 6),
-                Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+                Text(widget.title,
+                    style: Theme.of(context).textTheme.titleMedium),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: _saving ? null : save,
@@ -79,9 +82,14 @@ class _MemoEditorState extends ConsumerState<MemoEditor> {
               controller: _controller,
               minLines: 3,
               maxLines: null,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: '自由にメモを残せます',
+              style: Theme.of(context).textTheme.bodySmall,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: '自由にmemoを残せます',
+                hintStyle: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: DT.textSecondary),
               ),
             ),
             Align(
@@ -101,4 +109,3 @@ class _MemoEditorState extends ConsumerState<MemoEditor> {
     );
   }
 }
-

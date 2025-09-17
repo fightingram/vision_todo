@@ -59,7 +59,7 @@ class DreamDetailPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(dream?.title ?? initialTitle),
+        title: const Text('Detail'),
         actions: [
           IconButton(
             tooltip: 'タイトルを編集',

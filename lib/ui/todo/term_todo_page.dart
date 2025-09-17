@@ -56,7 +56,7 @@ class TermTodoPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(termWithTags.asData?.value?.item.title ?? termTitle),
+        title: const Text('Detail'),
         actions: [
           IconButton(
             tooltip: 'タイトルを編集',
