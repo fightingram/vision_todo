@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 
 import 'ui/home/home_page.dart';
+import 'ui/theme/app_theme.dart';
 import 'ui/todo/todo_page.dart';
 import 'ui/todo/term_todo_page.dart';
 import 'ui/todo/task_detail_page.dart';
@@ -219,24 +220,9 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(seedColor: Colors.teal);
     return MaterialApp.router(
       title: 'Vision TODO',
-      theme: ThemeData(
-        colorScheme: colorScheme,
-        useMaterial3: true,
-        appBarTheme: AppBarTheme(
-          backgroundColor: colorScheme.surface,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-          systemOverlayStyle: const SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.dark,
-            statusBarBrightness: Brightness.light,
-          ),
-        ),
-      ),
+      theme: buildLightTheme(),
       builder: (context, child) {
         // Dismiss keyboard when tapping outside of inputs anywhere in the app
         return GestureDetector(

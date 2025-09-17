@@ -270,7 +270,18 @@ class _MapCanvasState extends ConsumerState<_MapCanvas> {
             clipBehavior: Clip.none,
             child: Stack(
               children: [
-                SizedBox(width: contentWidth, height: contentHeight),
+                // subtle tinted background per design bg.base
+                Container(
+                  width: contentWidth,
+                  height: contentHeight,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFF2EBDD), Color(0xFFF8F5EE)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                ),
                 // Edges
                 Positioned.fill(
                   child: CustomPaint(
@@ -340,7 +351,7 @@ class _ZoomControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(6.0),
         child: Column(
@@ -417,7 +428,7 @@ class _EdgesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.grey.shade400
+      ..color = const Color(0xFFC9C2B3)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
@@ -460,7 +471,7 @@ class _NodeCard extends ConsumerWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(
         side: border,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: InkWell(
         onTap: () async {
@@ -513,13 +524,13 @@ class _TaskNodeContent extends StatelessWidget {
   Color _priorityColor(int? p) {
     switch (p) {
       case 3:
-        return Colors.red;
+        return const Color(0xFFE25555); // danger
       case 2:
-        return Colors.orange;
+        return const Color(0xFFE8A13A); // warning
       case 1:
-        return Colors.blue;
+        return const Color(0xFF2B6BE4); // brand
       default:
-        return Colors.grey;
+        return const Color(0xFF5E6672); // secondary
     }
   }
 
@@ -531,8 +542,8 @@ class _TaskNodeContent extends StatelessWidget {
         Icon(
           node.done == true ? Icons.check_circle : Icons.radio_button_unchecked,
           color: node.done == true
-              ? Colors.green
-              : Theme.of(context).disabledColor,
+              ? const Color(0xFF3CB371)
+              : const Color(0xFF5E6672),
           size: 18,
         ),
         const SizedBox(width: 8),
@@ -565,7 +576,7 @@ class _TaskNodeContent extends StatelessWidget {
                         border: Border.all(
                             color: Theme.of(context)
                                 .dividerColor
-                                .withOpacity(0.2)),
+                                .withOpacity(0.35)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text('${node.dueAt!.month}/${node.dueAt!.day}',

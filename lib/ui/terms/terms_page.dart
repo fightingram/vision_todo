@@ -546,7 +546,7 @@ class _TermDetailList extends ConsumerWidget {
                   itemCount: items.length,
                   itemBuilder: (context, i) => Dismissible(
                     key: ValueKey(items[i].id),
-                    background: Container(color: Colors.redAccent),
+                    background: Container(color: const Color(0xFFE25555).withOpacity(0.2)),
                     onDismissed: (_) => taskRepo.delete(items[i].id),
                     child: ListTile(
                       title: Text(items[i].title),

@@ -39,13 +39,13 @@ class TermTodoPage extends ConsumerWidget {
     Color priorityColor(int p, BuildContext context) {
       switch (p) {
         case 3:
-          return Colors.red;
+          return const Color(0xFFE25555);
         case 2:
-          return Colors.orange;
+          return const Color(0xFFE8A13A);
         case 1:
-          return Colors.blue;
+          return const Color(0xFF2B6BE4);
         default:
-          return Theme.of(context).disabledColor;
+          return const Color(0xFF5E6672);
       }
     }
 
@@ -164,7 +164,7 @@ class TermTodoPage extends ConsumerWidget {
             children: [
               // Header: term details
               Card(
-                margin: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Column(
@@ -246,7 +246,7 @@ class TermTodoPage extends ConsumerWidget {
                               border: Border.all(
                                   color: Theme.of(context)
                                       .dividerColor
-                                      .withOpacity(0.5)),
+                                      .withOpacity(0.35)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -316,6 +316,7 @@ class TermTodoPage extends ConsumerWidget {
                     }
                     children.add(MemoEditor(type: 'term', id: termId));
                     return ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
                       children: children,
                     );
                   },

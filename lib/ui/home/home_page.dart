@@ -13,6 +13,8 @@ import '../widgets/add_item_flow.dart';
 import '../widgets/task_tile.dart';
 import '../../models/task.dart';
 import '../../repositories/term_repositories.dart';
+import '../widgets/gradient_card.dart';
+import '../theme/design_tokens.dart';
 
 
 class HomePage extends ConsumerStatefulWidget {
@@ -75,7 +77,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 const _DreamsHeaderStrip(),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     children: [
                       _WeeklySection(
                         title: '今週',
@@ -108,13 +110,13 @@ class _DreamsHeaderStrip extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
           child: Text('夢', style: Theme.of(context).textTheme.titleMedium),
         ),
         SizedBox(
-          height: 92,
+          height: 120,
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             scrollDirection: Axis.horizontal,
             itemCount: dreams.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -144,52 +146,16 @@ class _DreamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gs = [DT.goalTeal, DT.goalIndigo, DT.goalAmber, DT.goalSalmon];
+    final grad = gs[title.hashCode.abs() % gs.length];
     return SizedBox(
-      width: 200,
-      child: Card(
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.8),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        title,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.check_circle, size: 16),
-                    const SizedBox(width: 6),
-                    Text('完了 TODO $doneCount件', style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      width: 240,
+      child: GradientCard(
+        gradient: LinearGradient(colors: grad, begin: Alignment.centerLeft, end: Alignment.centerRight),
+        onTap: onTap,
+        title: title,
+        subtitle: '完了 TODO $doneCount件',
+        decoration: const Icon(Icons.auto_awesome, size: 32, color: Colors.white),
       ),
     );
   }
@@ -301,48 +267,75 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
       builder: (context, snap) {
         final term = snap.data;
         final title = term?.title ?? '目標';
+        final top = _items.take(3).toList();
         return Card(
-          child: ExpansionTile(
-            initiallyExpanded: false,
-            leading: const Icon(Icons.flag_outlined),
-            title: InkWell(
-              onTap: term == null
-                  ? null
-                  : () => context.push('/todo/term/${term.id}', extra: term.title),
-              child: Text(title),
-            ),
-            subtitle: Text('TODO ${_items.length} 件'),
-            children: [
-              if (_items.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Text('該当のTODOはありません'),
-                )
-              else
-                ReorderableListView.builder(
-                  key: ValueKey('home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}'),
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _items.length,
-                  onReorder: (oldIndex, newIndex) async {
-                    setState(() {
-                      if (newIndex > oldIndex) newIndex -= 1;
-                      final item = _items.removeAt(oldIndex);
-                      _items.insert(newIndex, item);
-                    });
-                    final key = 'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
-                    await ref.read(orderServiceProvider).setOrder(
-                          key,
-                          _items.map((e) => e.id).toList(),
-                        );
-                  },
-                  itemBuilder: (context, i) => Card(
-                    key: ValueKey('home_week_task_${_items[i].id}'),
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: TaskTile(task: _items[i], showCheckbox: false, showEditMenu: false),
-                  ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.flag_outlined),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkWell(
+                        onTap: term == null ? null : () => context.push('/todo/term/${term.id}', extra: term.title),
+                        child: Text(
+                          title,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600, color: DT.textSecondary),
+                        ),
+                      ),
+                    ),
+                    Text('TODO ${_items.length} 件', style: Theme.of(context).textTheme.bodySmall),
+                  ],
                 ),
-            ],
+                const SizedBox(height: 8),
+                if (top.isEmpty)
+                  const Text('該当のTODOはありません')
+                else
+                  // Hierarchical child container with left guide line
+                  Container(
+                    decoration: const BoxDecoration(
+                      border: Border(left: BorderSide(color: DT.borderSubtle, width: 2)),
+                    ),
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        chipTheme: Theme.of(context).chipTheme.copyWith(
+                              side: BorderSide.none,
+                              labelStyle: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: DT.textPrimary),
+                            ),
+                      ),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          ...top.map((t) => ActionChip(
+                                label: Text(t.title, overflow: TextOverflow.ellipsis),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                onPressed: () => context.push('/todo/task/${t.id}', extra: t.title),
+                              )),
+                          if (_items.length > top.length)
+                            ActionChip(
+                              label: Text('すべて表示 (${_items.length})'),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onPressed: term == null ? null : () => context.push('/todo/term/${term.id}', extra: term.title),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -401,43 +394,65 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
 
   @override
   Widget build(BuildContext context) {
+    final top = _items.take(3).toList();
     return Card(
-      child: ExpansionTile(
-        initiallyExpanded: false,
-        leading: const Icon(Icons.link_off),
-        title: const Text('紐付けなし'),
-        subtitle: Text('TODO ${_items.length} 件'),
-        children: [
-          if (_items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(12.0),
-              child: Text('該当のTODOはありません'),
-            )
-          else
-            ReorderableListView.builder(
-              key: ValueKey('home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}'),
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _items.length,
-              onReorder: (oldIndex, newIndex) async {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final item = _items.removeAt(oldIndex);
-                  _items.insert(newIndex, item);
-                });
-                final key = 'home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}';
-                await ref.read(orderServiceProvider).setOrder(
-                      key,
-                      _items.map((e) => e.id).toList(),
-                    );
-              },
-              itemBuilder: (context, i) => Card(
-                key: ValueKey('home_week_unlinked_${_items[i].id}'),
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: TaskTile(task: _items[i], showCheckbox: false, showEditMenu: false),
-              ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.link_off),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '紐付けなし',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600, color: DT.textSecondary),
+                  ),
+                ),
+                Text('TODO ${_items.length} 件', style: Theme.of(context).textTheme.bodySmall),
+              ],
             ),
-        ],
+            const SizedBox(height: 8),
+            if (top.isEmpty)
+              const Text('該当のTODOはありません')
+            else
+              Theme(
+                data: Theme.of(context).copyWith(
+                  chipTheme: Theme.of(context).chipTheme.copyWith(
+                        side: BorderSide.none,
+                        labelStyle: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: DT.textPrimary),
+                      ),
+                ),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    ...top.map((t) => ActionChip(
+                          label: Text(t.title, overflow: TextOverflow.ellipsis),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          onPressed: () => context.push('/todo/task/${t.id}', extra: t.title),
+                        )),
+                    if (_items.length > top.length)
+                      ActionChip(
+                        label: Text('すべて表示 (${_items.length})'),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onPressed: () => context.push('/todo'),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

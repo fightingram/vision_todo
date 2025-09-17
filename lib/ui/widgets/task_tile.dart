@@ -21,13 +21,13 @@ class TaskTile extends ConsumerWidget {
   Color _priorityColor(int p) {
     switch (p) {
       case 3:
-        return Colors.red;
+        return const Color(0xFFE25555); // danger
       case 2:
-        return Colors.orange;
+        return const Color(0xFFE8A13A); // warning
       case 1:
-        return Colors.blue;
+        return const Color(0xFF2B6BE4); // brand
       default:
-        return Colors.grey;
+        return const Color(0xFF5E6672); // secondary
     }
   }
 
@@ -58,11 +58,11 @@ class TaskTile extends ConsumerWidget {
   Color _statusColor(TaskStatus s, BuildContext context) {
     switch (s) {
       case TaskStatus.todo:
-        return Theme.of(context).disabledColor;
+        return const Color(0xFF5E6672); // secondary
       case TaskStatus.doing:
-        return Colors.blue;
+        return const Color(0xFF2B6BE4); // brand
       case TaskStatus.done:
-        return Colors.green;
+        return const Color(0xFF3CB371); // success
     }
   }
 
@@ -106,7 +106,7 @@ class TaskTile extends ConsumerWidget {
               visualDensity: VisualDensity.compact,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-              side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+              side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.35)),
             ),
         ],
       ),

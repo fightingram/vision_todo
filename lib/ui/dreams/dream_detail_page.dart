@@ -42,13 +42,13 @@ class DreamDetailPage extends ConsumerWidget {
     Color priorityColor(int p, BuildContext context) {
       switch (p) {
         case 3:
-          return Colors.red;
+          return const Color(0xFFE25555);
         case 2:
-          return Colors.orange;
+          return const Color(0xFFE8A13A);
         case 1:
-          return Colors.blue;
+          return const Color(0xFF2B6BE4);
         default:
-          return Theme.of(context).disabledColor;
+          return const Color(0xFF5E6672);
       }
     }
 
@@ -198,7 +198,7 @@ class DreamDetailPage extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                            border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.35)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

@@ -32,13 +32,13 @@ class TaskDetailPage extends ConsumerWidget {
   Color _priorityColor(int p, BuildContext context) {
     switch (p) {
       case 3:
-        return Colors.red;
+        return const Color(0xFFE25555);
       case 2:
-        return Colors.orange;
+        return const Color(0xFFE8A13A);
       case 1:
-        return Colors.blue;
+        return const Color(0xFF2B6BE4);
       default:
-        return Theme.of(context).disabledColor;
+        return const Color(0xFF5E6672);
     }
   }
 
@@ -61,11 +61,11 @@ class TaskDetailPage extends ConsumerWidget {
   Color _statusColor(TaskStatus s, BuildContext context) {
     switch (s) {
       case TaskStatus.todo:
-        return Theme.of(context).disabledColor;
+        return const Color(0xFF5E6672);
       case TaskStatus.doing:
-        return Colors.blue;
+        return const Color(0xFF2B6BE4);
       case TaskStatus.done:
-        return Colors.green;
+        return const Color(0xFF3CB371);
     }
   }
 
@@ -150,7 +150,7 @@ class TaskDetailPage extends ConsumerWidget {
           }
 
           return ListView(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             children: [
               Card(
                 child: Padding(
@@ -208,7 +208,7 @@ class TaskDetailPage extends ConsumerWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                              border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.35)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,

@@ -21,6 +21,7 @@ class TriagePage extends ConsumerStatefulWidget {
 
 class _TriagePageState extends ConsumerState<TriagePage> {
   late List<Task> _queue;
+  int? _initialCount;
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
 
     // Refresh queue when provider updates
     _queue = List.of(tasks);
+    _initialCount ??= _queue.length;
 
     void decide(Task t, bool planned) async {
       await repo.setTriageDecision(t, weekStart, planned: planned);
@@ -62,7 +64,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
       body: _queue.isEmpty
           ? const Center(child: Text('今週の仕分けは完了しました'))
           : Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Column(
                 children: [
                   Expanded(
@@ -73,13 +75,13 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                         decide(_queue.first, dir == DismissDirection.endToStart ? false : true);
                       },
                       background: Container(
-                        color: Colors.green.withOpacity(0.3),
+                        color: const Color(0xFF3CB371).withOpacity(0.2),
                         alignment: Alignment.centerLeft,
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: const Row(children: [Icon(Icons.arrow_right_alt, size: 32), Text(' 今週やる')]),
                       ),
                       secondaryBackground: Container(
-                        color: Colors.red.withOpacity(0.3),
+                        color: const Color(0xFFE25555).withOpacity(0.2),
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: const Row(mainAxisAlignment: MainAxisAlignment.end, children: [Text(' やらない'), Icon(Icons.close)]),
@@ -87,6 +89,9 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                       child: _TriageCard(task: _queue.first),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // Progress bar
+                  _TriageProgress(total: _initialCount ?? 0, remaining: _queue.length),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -169,11 +174,11 @@ class _TriageCard extends ConsumerWidget {
     Color statusColor(TaskStatus s, BuildContext context) {
       switch (s) {
         case TaskStatus.todo:
-          return Theme.of(context).disabledColor;
+          return const Color(0xFF5E6672);
         case TaskStatus.doing:
-          return Colors.blue;
+          return const Color(0xFF2B6BE4);
         case TaskStatus.done:
-          return Colors.green;
+          return const Color(0xFF3CB371);
       }
     }
 
@@ -198,13 +203,13 @@ class _TriageCard extends ConsumerWidget {
     Color priorityColor(int p, BuildContext context) {
       switch (p) {
         case 3:
-          return Colors.red;
+          return const Color(0xFFE25555);
         case 2:
-          return Colors.orange;
+          return const Color(0xFFE8A13A);
         case 1:
-          return Colors.blue;
+          return const Color(0xFF2B6BE4);
         default:
-          return Theme.of(context).disabledColor;
+          return const Color(0xFF5E6672);
       }
     }
 
@@ -300,6 +305,34 @@ class _TriageCard extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _TriageProgress extends StatelessWidget {
+  const _TriageProgress({required this.total, required this.remaining});
+  final int total;
+  final int remaining;
+
+  @override
+  Widget build(BuildContext context) {
+    if (total <= 0) return const SizedBox.shrink();
+    final done = (total - remaining).clamp(0, total);
+    final progress = done / total;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(2),
+      child: SizedBox(
+        height: 4,
+        child: Stack(
+          children: [
+            Container(color: const Color(0xFFE6E2D8)),
+            FractionallySizedBox(
+              widthFactor: progress,
+              child: Container(color: const Color(0xFF2B6BE4)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
