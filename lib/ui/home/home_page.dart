@@ -402,11 +402,14 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
                           itemBuilder: (context, i) => Align(
                             key: ValueKey('home_term_top_item_${top[i].id}'),
                             alignment: Alignment.centerLeft,
-                            child: ActionChip(
-                              label: Text(top[i].title, overflow: TextOverflow.ellipsis),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4.0),
+                              child: ActionChip(
+                                label: Text(top[i].title, overflow: TextOverflow.ellipsis),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                              ),
                             ),
                           ),
                           ),
@@ -546,11 +549,14 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                       itemBuilder: (context, i) => Align(
                         key: ValueKey('home_unlinked_top_item_${top[i].id}'),
                         alignment: Alignment.centerLeft,
-                        child: ActionChip(
-                          label: Text(top[i].title, overflow: TextOverflow.ellipsis),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: ActionChip(
+                            label: Text(top[i].title, overflow: TextOverflow.ellipsis),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                          ),
                         ),
                       ),
                     ),
