@@ -513,7 +513,7 @@ class _LongFilteredSectionState extends ConsumerState<_LongFilteredSection> {
 
         return Card(
           child: ExpansionTile(
-            initiallyExpanded: true,
+            initiallyExpanded: false,
             leading: const Icon(Icons.flag_outlined),
             title: InkWell(
               onTap: () {

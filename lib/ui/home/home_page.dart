@@ -12,6 +12,7 @@ import '../../utils/date_utils.dart' as du;
 import '../widgets/add_item_flow.dart';
 import '../widgets/task_tile.dart';
 import '../../models/task.dart';
+import '../../repositories/term_repositories.dart';
 
 
 class HomePage extends ConsumerStatefulWidget {
@@ -76,10 +77,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     children: [
-                      _Section(
+                      _WeeklySection(
                         title: '今週',
                         tasks: thisWeek,
-                        orderKey: 'home_this_week_${weekStart.millisecondsSinceEpoch}',
+                        weekStart: weekStart,
                       ),
                     ],
                   ),
@@ -194,31 +195,81 @@ class _DreamCard extends StatelessWidget {
   }
 }
 
-class _Section extends ConsumerStatefulWidget {
-  const _Section({required this.title, required this.tasks, this.orderKey});
+class _WeeklySection extends ConsumerWidget {
+  const _WeeklySection({required this.title, required this.tasks, required this.weekStart});
   final String title;
   final List<Task> tasks;
-  final String? orderKey;
+  final DateTime weekStart;
 
   @override
-  ConsumerState<_Section> createState() => _SectionState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final grouped = <int, List<Task>>{};
+    final unlinked = <Task>[];
+    for (final t in tasks) {
+      final id = t.shortTermId;
+      if (id == null) {
+        unlinked.add(t);
+      } else {
+        (grouped[id] ??= <Task>[]).add(t);
+      }
+    }
+
+    final sections = <Widget>[];
+    sections.add(Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+    ));
+
+    if (tasks.isEmpty) {
+      sections.add(Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: Text('タスクはありません', style: Theme.of(context).textTheme.bodySmall),
+      ));
+    } else {
+      // Term sections
+      for (final entry in grouped.entries) {
+        sections.add(_HomeTermTasksSection(
+          termId: entry.key,
+          items: entry.value,
+          weekStart: weekStart,
+        ));
+      }
+      // Unlinked section
+      if (unlinked.isNotEmpty) {
+        sections.add(_HomeUnlinkedTasksSection(items: unlinked, weekStart: weekStart));
+      }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
+  }
 }
 
-class _SectionState extends ConsumerState<_Section> {
-  List<Task> _items = const [];
+class _HomeTermTasksSection extends ConsumerStatefulWidget {
+  const _HomeTermTasksSection({required this.termId, required this.items, required this.weekStart});
+  final int termId;
+  final List<Task> items;
+  final DateTime weekStart;
+
+  @override
+  ConsumerState<_HomeTermTasksSection> createState() => _HomeTermTasksSectionState();
+}
+
+class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
+  late List<Task> _items;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _items = List.of(widget.items);
+    _loadOrder();
   }
 
   @override
-  void didUpdateWidget(covariant _Section oldWidget) {
+  void didUpdateWidget(covariant _HomeTermTasksSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tasks.length != widget.tasks.length ||
-        !_sameIds(oldWidget.tasks, widget.tasks)) {
-      _load();
+    if (!_sameIds(oldWidget.items, widget.items)) {
+      _items = List.of(widget.items);
+      _loadOrder();
     }
   }
 
@@ -230,15 +281,10 @@ class _SectionState extends ConsumerState<_Section> {
     return true;
   }
 
-  Future<void> _load() async {
-    final key = widget.orderKey;
-    if (key == null) {
-      setState(() => _items = List.of(widget.tasks));
-      return;
-    }
-    final service = ref.read(orderServiceProvider);
-    final order = await service.getOrder(key);
-    final map = {for (final t in widget.tasks) t.id: t};
+  Future<void> _loadOrder() async {
+    final key = 'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
+    final order = await ref.read(orderServiceProvider).getOrder(key);
+    final map = {for (final t in _items) t.id: t};
     final ordered = <Task>[];
     for (final id in order) {
       final t = map.remove(id);
@@ -250,47 +296,149 @@ class _SectionState extends ConsumerState<_Section> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
-        ),
-        if (_items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text(
-              widget.title == '今日' ? '今日のTODOはありません' : 'タスクはありません',
-              style: Theme.of(context).textTheme.bodySmall,
+    return FutureBuilder<Term?>(
+      future: ref.read(termRepoProvider).getById(widget.termId),
+      builder: (context, snap) {
+        final term = snap.data;
+        final title = term?.title ?? '目標';
+        return Card(
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            leading: const Icon(Icons.flag_outlined),
+            title: InkWell(
+              onTap: term == null
+                  ? null
+                  : () => context.push('/todo/term/${term.id}', extra: term.title),
+              child: Text(title),
             ),
-          )
-        else
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _items.length,
-            onReorder: (oldIndex, newIndex) async {
-              setState(() {
-                if (newIndex > oldIndex) newIndex -= 1;
-                final item = _items.removeAt(oldIndex);
-                _items.insert(newIndex, item);
-              });
-              final key = widget.orderKey;
-              if (key != null) {
+            subtitle: Text('TODO ${_items.length} 件'),
+            children: [
+              if (_items.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: Text('該当のTODOはありません'),
+                )
+              else
+                ReorderableListView.builder(
+                  key: ValueKey('home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _items.length,
+                  onReorder: (oldIndex, newIndex) async {
+                    setState(() {
+                      if (newIndex > oldIndex) newIndex -= 1;
+                      final item = _items.removeAt(oldIndex);
+                      _items.insert(newIndex, item);
+                    });
+                    final key = 'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
+                    await ref.read(orderServiceProvider).setOrder(
+                          key,
+                          _items.map((e) => e.id).toList(),
+                        );
+                  },
+                  itemBuilder: (context, i) => Card(
+                    key: ValueKey('home_week_task_${_items[i].id}'),
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: TaskTile(task: _items[i], showCheckbox: false, showEditMenu: false),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeUnlinkedTasksSection extends ConsumerStatefulWidget {
+  const _HomeUnlinkedTasksSection({required this.items, required this.weekStart});
+  final List<Task> items;
+  final DateTime weekStart;
+
+  @override
+  ConsumerState<_HomeUnlinkedTasksSection> createState() => _HomeUnlinkedTasksSectionState();
+}
+
+class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSection> {
+  late List<Task> _items;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List.of(widget.items);
+    _loadOrder();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeUnlinkedTasksSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameIds(oldWidget.items, widget.items)) {
+      _items = List.of(widget.items);
+      _loadOrder();
+    }
+  }
+
+  bool _sameIds(List<Task> a, List<Task> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+    }
+    return true;
+  }
+
+  Future<void> _loadOrder() async {
+    final key = 'home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}';
+    final order = await ref.read(orderServiceProvider).getOrder(key);
+    final map = {for (final t in _items) t.id: t};
+    final ordered = <Task>[];
+    for (final id in order) {
+      final t = map.remove(id);
+      if (t != null) ordered.add(t);
+    }
+    ordered.addAll(map.values);
+    setState(() => _items = ordered);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        leading: const Icon(Icons.link_off),
+        title: const Text('紐付けなし'),
+        subtitle: Text('TODO ${_items.length} 件'),
+        children: [
+          if (_items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(12.0),
+              child: Text('該当のTODOはありません'),
+            )
+          else
+            ReorderableListView.builder(
+              key: ValueKey('home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}'),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _items.length,
+              onReorder: (oldIndex, newIndex) async {
+                setState(() {
+                  if (newIndex > oldIndex) newIndex -= 1;
+                  final item = _items.removeAt(oldIndex);
+                  _items.insert(newIndex, item);
+                });
+                final key = 'home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}';
                 await ref.read(orderServiceProvider).setOrder(
                       key,
                       _items.map((e) => e.id).toList(),
                     );
-              }
-            },
-            itemBuilder: (context, i) => Card(
-              key: ValueKey('home_task_${_items[i].id}'),
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              child: TaskTile(task: _items[i], showCheckbox: false, showEditMenu: false),
+              },
+              itemBuilder: (context, i) => Card(
+                key: ValueKey('home_week_unlinked_${_items[i].id}'),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: TaskTile(task: _items[i], showCheckbox: false, showEditMenu: false),
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
