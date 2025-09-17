@@ -161,49 +161,112 @@ class _DreamCard extends StatelessWidget {
   }
 }
 
-class _WeeklySection extends ConsumerWidget {
+class _WeeklySection extends ConsumerStatefulWidget {
   const _WeeklySection({required this.title, required this.tasks, required this.weekStart});
   final String title;
   final List<Task> tasks;
   final DateTime weekStart;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_WeeklySection> createState() => _WeeklySectionState();
+}
+
+class _WeeklySectionState extends ConsumerState<_WeeklySection> {
+  late List<int> _termOrder; // ordered term ids
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _termOrder = [];
+    _loadOrder();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WeeklySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.weekStart != widget.weekStart || oldWidget.tasks != widget.tasks) {
+      _loadOrder();
+    }
+  }
+
+  Future<void> _loadOrder() async {
+    final grouped = _groupByTerm(widget.tasks);
+    final key = 'home_week_terms_${widget.weekStart.millisecondsSinceEpoch}';
+    final saved = await ref.read(orderServiceProvider).getOrder(key);
+    final existing = grouped.keys.toSet();
+    final ordered = <int>[];
+    // keep saved order that still exists
+    for (final id in saved) {
+      if (existing.remove(id)) ordered.add(id);
+    }
+    // append new ids
+    ordered.addAll(existing);
+    setState(() {
+      _termOrder = ordered;
+      _loaded = true;
+    });
+  }
+
+  Map<int, List<Task>> _groupByTerm(List<Task> tasks) {
     final grouped = <int, List<Task>>{};
-    final unlinked = <Task>[];
     for (final t in tasks) {
       final id = t.shortTermId;
-      if (id == null) {
-        unlinked.add(t);
-      } else {
-        (grouped[id] ??= <Task>[]).add(t);
-      }
+      if (id != null) (grouped[id] ??= <Task>[]).add(t);
     }
+    return grouped;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final grouped = _groupByTerm(widget.tasks);
+    final unlinked = widget.tasks.where((t) => t.shortTermId == null).toList();
 
     final sections = <Widget>[];
     sections.add(Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+      child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
     ));
 
-    if (tasks.isEmpty) {
+    if (widget.tasks.isEmpty) {
       sections.add(Padding(
         padding: const EdgeInsets.only(bottom: 8.0),
         child: Text('タスクはありません', style: Theme.of(context).textTheme.bodySmall),
       ));
-    } else {
-      // Term sections
-      for (final entry in grouped.entries) {
-        sections.add(_HomeTermTasksSection(
-          termId: entry.key,
-          items: entry.value,
-          weekStart: weekStart,
-        ));
-      }
-      // Unlinked section
-      if (unlinked.isNotEmpty) {
-        sections.add(_HomeUnlinkedTasksSection(items: unlinked, weekStart: weekStart));
-      }
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
+    }
+
+    final termIds = _loaded ? _termOrder : grouped.keys.toList();
+
+    sections.add(
+      ReorderableListView.builder(
+        key: ValueKey('home_terms_${widget.weekStart.millisecondsSinceEpoch}'),
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: termIds.length,
+        onReorder: (oldIndex, newIndex) async {
+          setState(() {
+            if (newIndex > oldIndex) newIndex -= 1;
+            final id = termIds.removeAt(oldIndex);
+            termIds.insert(newIndex, id);
+          });
+          final key = 'home_week_terms_${widget.weekStart.millisecondsSinceEpoch}';
+          await ref.read(orderServiceProvider).setOrder(key, termIds);
+          setState(() => _termOrder = List.of(termIds));
+        },
+        itemBuilder: (context, i) {
+          final id = termIds[i];
+          final items = grouped[id] ?? const <Task>[];
+          return Container(
+            key: ValueKey('home_term_$id'),
+            child: _HomeTermTasksSection(termId: id, items: items, weekStart: widget.weekStart),
+          );
+        },
+      ),
+    );
+
+    if (unlinked.isNotEmpty) {
+      sections.add(_HomeUnlinkedTasksSection(items: unlinked, weekStart: widget.weekStart));
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: sections);
@@ -268,7 +331,7 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
         final term = snap.data;
         final title = term?.title ?? '目標';
         final top = _items.take(3).toList();
-        return Card(
+        return Container(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             child: Column(
@@ -297,41 +360,68 @@ class _HomeTermTasksSectionState extends ConsumerState<_HomeTermTasksSection> {
                 if (top.isEmpty)
                   const Text('該当のTODOはありません')
                 else
-                  // Hierarchical child container with left guide line
+                  // Hierarchical child container with left guide line and reorder (long-press)
                   Container(
                     decoration: const BoxDecoration(
                       border: Border(left: BorderSide(color: DT.borderSubtle, width: 2)),
                     ),
                     padding: const EdgeInsets.only(left: 12),
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        chipTheme: Theme.of(context).chipTheme.copyWith(
-                              side: BorderSide.none,
-                              labelStyle: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: DT.textPrimary),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Theme(
+                          data: Theme.of(context).copyWith(
+                            chipTheme: Theme.of(context).chipTheme.copyWith(
+                                  side: BorderSide.none,
+                                  labelStyle: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: DT.textPrimary),
+                                ),
+                          ),
+                          child: ReorderableListView.builder(
+                            key: ValueKey('home_term_top_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}'),
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: top.length,
+                            onReorder: (oldIndex, newIndex) async {
+                            setState(() {
+                              if (newIndex > oldIndex) newIndex -= 1;
+                              final item = top.removeAt(oldIndex);
+                              top.insert(newIndex, item);
+                              // reflect into full list: top first, then rest keeping order
+                              final rest = _items.where((e) => !top.contains(e)).toList();
+                              _items = [...top, ...rest];
+                            });
+                            final key = 'home_week_term_${widget.termId}_${widget.weekStart.millisecondsSinceEpoch}';
+                            await ref.read(orderServiceProvider).setOrder(
+                              key,
+                              _items.map((e) => e.id).toList(),
+                            );
+                          },
+                          itemBuilder: (context, i) => Align(
+                            key: ValueKey('home_term_top_item_${top[i].id}'),
+                            alignment: Alignment.centerLeft,
+                            child: ActionChip(
+                              label: Text(top[i].title, overflow: TextOverflow.ellipsis),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
                             ),
-                      ),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          ...top.map((t) => ActionChip(
-                                label: Text(t.title, overflow: TextOverflow.ellipsis),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                onPressed: () => context.push('/todo/task/${t.id}', extra: t.title),
-                              )),
-                          if (_items.length > top.length)
-                            ActionChip(
+                          ),
+                          ),
+                        ),
+                        if (_items.length > top.length)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6.0),
+                            child: ActionChip(
                               label: Text('すべて表示 (${_items.length})'),
                               visualDensity: VisualDensity.compact,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               onPressed: term == null ? null : () => context.push('/todo/term/${term.id}', extra: term.title),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
                   ),
               ],
@@ -395,7 +485,7 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
   @override
   Widget build(BuildContext context) {
     final top = _items.take(3).toList();
-    return Card(
+    return Container(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Column(
@@ -431,22 +521,48 @@ class _HomeUnlinkedTasksSectionState extends ConsumerState<_HomeUnlinkedTasksSec
                             ?.copyWith(color: DT.textPrimary),
                       ),
                 ),
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ...top.map((t) => ActionChip(
-                          label: Text(t.title, overflow: TextOverflow.ellipsis),
+                    ReorderableListView.builder(
+                      key: ValueKey('home_unlinked_top_${widget.weekStart.millisecondsSinceEpoch}'),
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: top.length,
+                      onReorder: (oldIndex, newIndex) async {
+                        setState(() {
+                          if (newIndex > oldIndex) newIndex -= 1;
+                          final item = top.removeAt(oldIndex);
+                          top.insert(newIndex, item);
+                          final rest = _items.where((e) => !top.contains(e)).toList();
+                          _items = [...top, ...rest];
+                        });
+                        final key = 'home_week_unlinked_${widget.weekStart.millisecondsSinceEpoch}';
+                        await ref.read(orderServiceProvider).setOrder(
+                          key,
+                          _items.map((e) => e.id).toList(),
+                        );
+                      },
+                      itemBuilder: (context, i) => Align(
+                        key: ValueKey('home_unlinked_top_item_${top[i].id}'),
+                        alignment: Alignment.centerLeft,
+                        child: ActionChip(
+                          label: Text(top[i].title, overflow: TextOverflow.ellipsis),
                           visualDensity: VisualDensity.compact,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          onPressed: () => context.push('/todo/task/${t.id}', extra: t.title),
-                        )),
+                          onPressed: () => context.push('/todo/task/${top[i].id}', extra: top[i].title),
+                        ),
+                      ),
+                    ),
                     if (_items.length > top.length)
-                      ActionChip(
-                        label: Text('すべて表示 (${_items.length})'),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        onPressed: () => context.push('/todo'),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: ActionChip(
+                          label: Text('すべて表示 (${_items.length})'),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          onPressed: () => context.push('/todo'),
+                        ),
                       ),
                   ],
                 ),
