@@ -11,6 +11,7 @@ import 'ui/todo/task_detail_page.dart';
 import 'ui/maps/maps_page.dart';
 import 'ui/dreams/dream_detail_page.dart';
 import 'ui/triage/triage_page.dart';
+import 'ui/settings/settings_page.dart';
 import 'providers/task_providers.dart';
 import 'providers/db_provider.dart';
 import 'providers/settings_provider.dart';
@@ -73,7 +74,8 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
               name: 'term_detail',
               pageBuilder: (context, state) {
                 final id = int.parse(state.pathParameters['id']!);
-                final title = (state.extra is String) ? state.extra as String : 'Term';
+                final title =
+                    (state.extra is String) ? state.extra as String : 'Term';
                 return MaterialPage(
                   key: state.pageKey,
                   child: TermTodoPage(termId: id, termTitle: title),
@@ -85,7 +87,8 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
               name: 'task_detail',
               pageBuilder: (context, state) {
                 final id = int.parse(state.pathParameters['id']!);
-                final title = (state.extra is String) ? state.extra as String : 'TODO';
+                final title =
+                    (state.extra is String) ? state.extra as String : 'TODO';
                 return MaterialPage(
                   key: state.pageKey,
                   child: TaskDetailPage(taskId: id, initialTitle: title),
@@ -104,12 +107,20 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
               name: 'dream_detail',
               pageBuilder: (context, state) {
                 final id = int.parse(state.pathParameters['id']!);
-                final title = (state.extra is String) ? state.extra as String : '夢';
+                final title =
+                    (state.extra is String) ? state.extra as String : '夢';
                 return MaterialPage(
                   key: state.pageKey,
                   child: DreamDetailPage(dreamId: id, initialTitle: title),
                 );
               },
+            ),
+            GoRoute(
+              path: '/settings',
+              name: 'settings',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: SettingsPage(),
+              ),
             ),
           ],
         ),
@@ -122,7 +133,8 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
         _startupTriageTriggered = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final items = ref.read(triageTasksProvider);
-          final ws = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
+          final ws = du.startOfWeek(
+              DateTime.now(), ref.read(settingsProvider).weekStart);
           _lastHandledWeekStart = ws;
           _lastKnownTriageCount = items.length;
           final skipWeek = ref.read(triageSkipWeekProvider);
@@ -143,7 +155,8 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       final settings = ref.read(settingsProvider);
       final currentWeek = du.startOfWeek(DateTime.now(), settings.weekStart);
       // 同週のみ対象
-      if (_lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, currentWeek)) {
+      if (_lastHandledWeekStart == null ||
+          !du.isSameDate(_lastHandledWeekStart!, currentWeek)) {
         // 週が変わった場合はここではカウントだけ更新
         _lastKnownTriageCount = next.length;
         return;
@@ -153,7 +166,8 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       final increased = nextLen > prevLen;
       // 既にトリアージ画面、または遷移中なら何もしない
       final skipWeek = ref.read(triageSkipWeekProvider);
-      final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, currentWeek);
+      final shouldSkip =
+          skipWeek != null && du.isSameDate(skipWeek, currentWeek);
       if (increased && nextLen > 0 && !_triagePushInProgress && !shouldSkip) {
         final loc = _router.routeInformationProvider.value.location ?? '';
         if (!loc.startsWith('/triage') && mounted) {
@@ -179,8 +193,10 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       // フォアグラウンド復帰時に週替わりを検知
-      final weekStartNow = du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
-      final hasChanged = _lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, weekStartNow);
+      final weekStartNow =
+          du.startOfWeek(DateTime.now(), ref.read(settingsProvider).weekStart);
+      final hasChanged = _lastHandledWeekStart == null ||
+          !du.isSameDate(_lastHandledWeekStart!, weekStartNow);
       if (hasChanged) {
         _lastHandledWeekStart = weekStartNow; // 同週での重複表示を防止
         // 既に仕分け画面なら何もしない
@@ -202,7 +218,8 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
         final nextLen = items.length;
         final increased = nextLen > _lastKnownTriageCount;
         final skipWeek = ref.read(triageSkipWeekProvider);
-        final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, weekStartNow);
+        final shouldSkip =
+            skipWeek != null && du.isSameDate(skipWeek, weekStartNow);
         if (increased && nextLen > 0 && !_triagePushInProgress && !shouldSkip) {
           final loc = _router.routeInformationProvider.value.location ?? '';
           if (!loc.startsWith('/triage') && mounted) {
@@ -221,19 +238,21 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Vision TODO',
+      title: 'Dream todo',
       theme: buildLightTheme(),
       builder: (context, child) {
         // Clamp system font scaling for consistent UI and dismiss keyboard on tap-out
         final mq = MediaQuery.of(context);
-        final clamped = mq.textScaler.clamp(minScaleFactor: 1.0, maxScaleFactor: 1.15);
+        final clamped =
+            mq.textScaler.clamp(minScaleFactor: 1.0, maxScaleFactor: 1.15);
         return MediaQuery(
           data: mq.copyWith(textScaler: clamped),
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
               final currentFocus = FocusScope.of(context);
-              if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+              if (!currentFocus.hasPrimaryFocus &&
+                  currentFocus.focusedChild != null) {
                 currentFocus.unfocus();
               }
             },
@@ -254,6 +273,7 @@ class _ScaffoldWithNav extends StatelessWidget {
     final loc = GoRouterState.of(context).uri.toString();
     if (loc.startsWith('/maps')) return 2;
     if (loc.startsWith('/todo')) return 1;
+    if (loc.startsWith('/settings')) return 3;
     return 0;
   }
 
@@ -268,6 +288,9 @@ class _ScaffoldWithNav extends StatelessWidget {
       case 2:
         context.go('/maps');
         break;
+      case 3:
+        context.go('/settings');
+        break;
     }
   }
 
@@ -281,8 +304,12 @@ class _ScaffoldWithNav extends StatelessWidget {
         onDestinationSelected: (i) => _onTap(context, i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.checklist_outlined), label: 'TODO'),
-          NavigationDestination(icon: Icon(Icons.account_tree_outlined), label: 'Maps'),
+          NavigationDestination(
+              icon: Icon(Icons.checklist_outlined), label: 'TODO'),
+          NavigationDestination(
+              icon: Icon(Icons.account_tree_outlined), label: 'Maps'),
+          NavigationDestination(
+              icon: Icon(Icons.settings_outlined), label: 'Setting'),
         ],
       ),
     );
