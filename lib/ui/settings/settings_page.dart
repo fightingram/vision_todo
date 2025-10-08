@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:in_app_review/in_app_review.dart';
+import 'package:go_router/go_router.dart';
 import 'terms_page.dart';
 
 import '../../providers/settings_provider.dart';
@@ -21,6 +22,25 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         children: [
+          // 活動
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0, top: 16.0),
+            child:
+                Text('活動', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome_motion),
+                  title: const Text('活動記録を作成'),
+                  subtitle: const Text('期間と夢を選び、完了一覧を画像に出力'),
+                  onTap: () => context.push('/settings/activity-report'),
+                ),
+              ],
+            ),
+          ),
+          // 設定
           // 週の開始（唯一の設定）
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0, top: 16.0),

@@ -12,6 +12,7 @@ import 'ui/maps/maps_page.dart';
 import 'ui/dreams/dream_detail_page.dart';
 import 'ui/triage/triage_page.dart';
 import 'ui/settings/settings_page.dart';
+import 'ui/settings/activity_report_page.dart';
 import 'providers/task_providers.dart';
 import 'providers/db_provider.dart';
 import 'providers/settings_provider.dart';
@@ -120,6 +121,13 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
               name: 'settings',
               pageBuilder: (context, state) => const NoTransitionPage(
                 child: SettingsPage(),
+              ),
+            ),
+            GoRoute(
+              path: '/settings/activity-report',
+              name: 'activity_report',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: ActivityReportPage(),
               ),
             ),
           ],

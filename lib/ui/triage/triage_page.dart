@@ -13,6 +13,8 @@ import '../../utils/date_utils.dart' as du;
 import '../../providers/triage_provider.dart';
 import '../theme/design_tokens.dart';
 
+enum _Stage { goals, tasks }
+
 class TriagePage extends ConsumerStatefulWidget {
   const TriagePage({super.key});
 
@@ -21,8 +23,19 @@ class TriagePage extends ConsumerStatefulWidget {
 }
 
 class _TriagePageState extends ConsumerState<TriagePage> {
+  // Stage management: first triage Goals, then triage Tasks for selected Goals
+  _Stage _stage = _Stage.goals;
+
+  // Task triage queue
   late List<Task> _queue;
   int? _initialCount;
+
+  // Goal triage queue
+  // A GoalKey abstracts either ShortTerm or LongTerm id and type
+  // type: 'st' (ShortTerm), 'lt' (LongTerm), or 'none' (unlinked tasks)
+  List<({String type, int? id})>? _goalQueue;
+  int? _goalInitialCount;
+  final Set<({String type, int? id})> _selectedGoals = {};
 
   @override
   void initState() {
@@ -41,12 +54,62 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     _queue = List.of(tasks);
     _initialCount ??= _queue.length;
 
+    // Build goal queue from tasks once
+    List<({String type, int? id})> buildGoalQueue(List<Task> list) {
+      final set = <String, ({String type, int? id})>{};
+      bool hasUnlinked = false;
+      for (final t in list) {
+        final sid = t.shortTermId;
+        if (sid == null) {
+          hasUnlinked = true;
+          continue;
+        }
+        // We don't know if sid points to ShortTerm or LongTerm; enqueue both keys lazily-resolved by UI
+        // But to keep stable keys, we will resolve type by probing Isar synchronously later.
+        // For uniqueness here, just use the id as string; type will be resolved when rendering.
+        final key = 'id:$sid';
+        set.putIfAbsent(key, () => (type: 'unknown', id: sid));
+      }
+      final queue = set.values.toList();
+      if (hasUnlinked) queue.add((type: 'none', id: null));
+      return queue;
+    }
+
+    _goalQueue ??= buildGoalQueue(_queue);
+    _goalInitialCount ??= _goalQueue!.length;
+
     void decide(Task t, bool planned) async {
       await repo.setTriageDecision(t, weekStart, planned: planned);
       setState(() {
         _queue.removeWhere((e) => e.id == t.id);
       });
       if (_queue.isEmpty && mounted) Navigator.of(context).pop();
+    }
+
+    // When deciding a goal: add to selected set if planned; then advance
+    void decideGoal(({String type, int? id}) g, bool planned) {
+      setState(() {
+        if (planned) _selectedGoals.add(g);
+        _goalQueue!.remove(g);
+        if (_goalQueue!.isEmpty) {
+          // Move to tasks stage, scoped to selected goals
+          _stage = _Stage.tasks;
+          if (_selectedGoals.isNotEmpty) {
+            _queue = _queue.where((t) {
+              if (t.shortTermId == null) {
+                return _selectedGoals.contains((type: 'none', id: null));
+              }
+              // We don't know type; allow match on id regardless of type
+              return _selectedGoals.any((g) => g.id == t.shortTermId);
+            }).toList();
+            _initialCount = _queue.length;
+          } else {
+            // No goals selected => nothing to triage
+            _queue = [];
+            _initialCount = 0;
+          }
+        }
+      });
     }
 
     String weekLabel(DateTime start) {
@@ -57,7 +120,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('今週の仕分け'),
+        title: Text(_stage == _Stage.goals ? '今週の仕分け（目標）' : '今週の仕分け（TODO）'),
         actions: [
           TextButton(
             onPressed: () {
@@ -69,7 +132,8 @@ class _TriagePageState extends ConsumerState<TriagePage> {
           )
         ],
       ),
-      body: _queue.isEmpty
+      body: ((_stage == _Stage.tasks && _queue.isEmpty) ||
+              (_stage == _Stage.goals && (_goalQueue == null || _goalQueue!.isEmpty)))
           ? const Center(child: Text('今週の仕分けは完了しました'))
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -109,9 +173,26 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                               color: DT.brandPrimary.withOpacity(0.3)),
                         ),
                         child: Text(
-                            '残り ${_queue.length} / ${_initialCount ?? _queue.length} 件',
+                            _stage == _Stage.goals
+                                ? '残り ${_goalQueue!.length} / ${_goalInitialCount ?? _goalQueue!.length} 目標'
+                                : '残り ${_queue.length} / ${_initialCount ?? _queue.length} 件',
                             style: Theme.of(context).textTheme.bodySmall),
                       ),
+                      if (_stage == _Stage.goals && _selectedGoals.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: DT.bgTint,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: DT.borderSubtle),
+                            ),
+                            child: Text('選択済み ${_selectedGoals.length} 件',
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -143,180 +224,286 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // Context chain (outside of card): Dream / Goals
-                  FutureBuilder<(ShortTerm?, LongTerm?, Dream?)>(
-                    future: (() async {
-                      ShortTerm? st;
-                      LongTerm? lt;
-                      Dream? dr;
-                      final id = _queue.first.shortTermId;
-                      final isar = ref.read(isarServiceProvider).isar;
-                      if (id != null) {
-                        st = await isar.shortTerms.get(id);
-                        if (st != null) {
-                          if (st.longTermId != null) {
-                            lt = await isar.longTerms.get(st.longTermId!);
-                            if (lt?.dreamId != null) {
-                              dr = await isar.dreams.get(lt!.dreamId!);
+                  if (_stage == _Stage.tasks) ...[
+                    // Context chain (outside of card): Dream / Goals
+                    FutureBuilder<(ShortTerm?, LongTerm?, Dream?)>(
+                      future: (() async {
+                        ShortTerm? st;
+                        LongTerm? lt;
+                        Dream? dr;
+                        final id = _queue.first.shortTermId;
+                        final isar = ref.read(isarServiceProvider).isar;
+                        if (id != null) {
+                          st = await isar.shortTerms.get(id);
+                          if (st != null) {
+                            if (st.longTermId != null) {
+                              lt = await isar.longTerms.get(st.longTermId!);
+                              if (lt?.dreamId != null) {
+                                dr = await isar.dreams.get(lt!.dreamId!);
+                              }
+                            }
+                          } else {
+                            lt = await isar.longTerms.get(id);
+                            if (lt != null && lt.dreamId != null) {
+                              dr = await isar.dreams.get(lt.dreamId!);
                             }
                           }
-                        } else {
-                          lt = await isar.longTerms.get(id);
-                          if (lt != null && lt.dreamId != null) {
-                            dr = await isar.dreams.get(lt.dreamId!);
-                          }
                         }
-                      }
-                      return (st, lt, dr);
-                    })(),
-                    builder: (context, snap) {
-                      final st = snap.data?.$1;
-                      final lt = snap.data?.$2;
-                      final dr = snap.data?.$3;
-                      if (st == null && lt == null && dr == null)
-                        return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Wrap(
-                          spacing: 12,
-                          runSpacing: 6,
-                          children: [
-                            if (dr != null)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.lightbulb_outline, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text('夢: ${dr!.title}')
-                                ],
-                              ),
-                            if (lt != null)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.emoji_flags_outlined,
-                                      size: 16),
-                                  const SizedBox(width: 6),
-                                  Text('長期目標: ${lt!.title}')
-                                ],
-                              ),
-                            if (st != null)
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.flag_outlined, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text('短期目標: ${st!.title}')
-                                ],
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  // Card area
-                  Expanded(
-                    child: Dismissible(
-                      key: ValueKey(_queue.first.id),
-                      direction: DismissDirection.horizontal,
-                      onDismissed: (dir) {
-                        // 右=今週やる, 左=やらない
-                        decide(
-                            _queue.first, dir == DismissDirection.startToEnd);
+                        return (st, lt, dr);
+                      })(),
+                      builder: (context, snap) {
+                        final st = snap.data?.$1;
+                        final lt = snap.data?.$2;
+                        final dr = snap.data?.$3;
+                        if (st == null && lt == null && dr == null) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Wrap(
+                            spacing: 12,
+                            runSpacing: 6,
+                            children: [
+                              if (dr != null)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.lightbulb_outline, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text('夢: ${dr!.title}')
+                                  ],
+                                ),
+                              if (lt != null)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.emoji_flags_outlined,
+                                        size: 16),
+                                    const SizedBox(width: 6),
+                                    Text('長期目標: ${lt!.title}')
+                                  ],
+                                ),
+                              if (st != null)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.flag_outlined, size: 16),
+                                    const SizedBox(width: 6),
+                                    Text('短期目標: ${st!.title}')
+                                  ],
+                                ),
+                            ],
+                          ),
+                        );
                       },
-                      background: Align(
-                        alignment: Alignment.centerLeft,
-                        child: FractionallySizedBox(
-                          heightFactor: 0.75,
-                          widthFactor: 1.0,
-                          child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3CB371).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: const Color(0xFF3CB371).withOpacity(0.35)),
-                        ),
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: const Row(children: [
-                              Icon(Icons.check_circle,
-                                  size: 28, color: Color(0xFF3CB371)),
-                              SizedBox(width: 8),
-                              Text('今週やる')
-                            ]),
-                          ),
-                        ),
-                      ),
-                      secondaryBackground: Align(
-                        alignment: Alignment.centerRight,
-                        child: FractionallySizedBox(
-                          heightFactor: 0.75,
-                          widthFactor: 1.0,
-                          child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE25555).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                              color: const Color(0xFFE25555).withOpacity(0.35)),
-                        ),
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Text('やらない'),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.cancel,
-                                      color: Color(0xFFE25555), size: 26)
-                                ]),
-                          ),
-                        ),
-                      ),
-                      child: Align(
-                        alignment: Alignment.center,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 600),
+                    ),
+                    // Card area
+                    Expanded(
+                      child: Dismissible(
+                        key: ValueKey(_queue.first.id),
+                        direction: DismissDirection.horizontal,
+                        onDismissed: (dir) {
+                          // 右=今週やる, 左=やらない
+                          decide(
+                              _queue.first, dir == DismissDirection.startToEnd);
+                        },
+                        background: Align(
+                          alignment: Alignment.centerLeft,
                           child: FractionallySizedBox(
                             heightFactor: 0.75,
-                            alignment: Alignment.center,
-                            child: _TriageCard(task: _queue.first),
+                            widthFactor: 1.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3CB371).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: const Color(0xFF3CB371).withOpacity(0.35)),
+                              ),
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: const Row(children: [
+                                Icon(Icons.check_circle,
+                                    size: 28, color: Color(0xFF3CB371)),
+                                SizedBox(width: 8),
+                                Text('今週やる')
+                              ]),
+                            ),
+                          ),
+                        ),
+                        secondaryBackground: Align(
+                          alignment: Alignment.centerRight,
+                          child: FractionallySizedBox(
+                            heightFactor: 0.75,
+                            widthFactor: 1.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE25555).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: const Color(0xFFE25555).withOpacity(0.35)),
+                              ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text('やらない'),
+                                    SizedBox(width: 8),
+                                    Icon(Icons.cancel,
+                                        color: Color(0xFFE25555), size: 26)
+                                  ]),
+                            ),
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: FractionallySizedBox(
+                              heightFactor: 0.75,
+                              alignment: Alignment.center,
+                              child: _TriageCard(task: _queue.first),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Progress bar above action buttons
-                  _TriageProgress(
-                      total: _initialCount ?? 0, remaining: _queue.length),
-                  const SizedBox(height: 8),
-                  // Action buttons placed closer to card
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14)),
-                          onPressed: () => decide(_queue.first, false),
-                          icon: const Icon(Icons.close),
-                          label: const Text('やらない'),
+                    const SizedBox(height: 8),
+                    // Progress bar above action buttons
+                    _TriageProgress(
+                        total: _initialCount ?? 0, remaining: _queue.length),
+                    const SizedBox(height: 8),
+                    // Action buttons placed closer to card
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14)),
+                            onPressed: () => decide(_queue.first, false),
+                            icon: const Icon(Icons.close),
+                            label: const Text('やらない'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14)),
+                            onPressed: () => decide(_queue.first, true),
+                            icon: const Icon(Icons.check),
+                            label: const Text('今週やる'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ]
+                  else ...[
+                    // Goals stage
+                    Expanded(
+                      child: Dismissible(
+                        key: ValueKey('${_goalQueue!.first.type}:${_goalQueue!.first.id ?? 'none'}'),
+                        direction: DismissDirection.horizontal,
+                        onDismissed: (dir) {
+                          decideGoal(_goalQueue!.first,
+                              dir == DismissDirection.startToEnd);
+                        },
+                        background: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            heightFactor: 0.75,
+                            widthFactor: 1.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3CB371).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: const Color(0xFF3CB371).withOpacity(0.35)),
+                              ),
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: const Row(children: [
+                                Icon(Icons.check_circle,
+                                    size: 28, color: Color(0xFF3CB371)),
+                                SizedBox(width: 8),
+                                Text('今週やる')
+                              ]),
+                            ),
+                          ),
+                        ),
+                        secondaryBackground: Align(
+                          alignment: Alignment.centerRight,
+                          child: FractionallySizedBox(
+                            heightFactor: 0.75,
+                            widthFactor: 1.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE25555).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: const Color(0xFFE25555).withOpacity(0.35)),
+                              ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text('やらない'),
+                                    SizedBox(width: 8),
+                                    Icon(Icons.cancel,
+                                        color: Color(0xFFE25555), size: 26)
+                                  ]),
+                            ),
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: FractionallySizedBox(
+                              heightFactor: 0.75,
+                              alignment: Alignment.center,
+                              child: _GoalTriageCard(goal: _goalQueue!.first),
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14)),
-                          onPressed: () => decide(_queue.first, true),
-                          icon: const Icon(Icons.check),
-                          label: const Text('今週やる'),
+                    ),
+                    const SizedBox(height: 8),
+                    _TriageProgress(
+                        total: _goalInitialCount ?? 0,
+                        remaining: _goalQueue!.length),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14)),
+                            onPressed: () => decideGoal(_goalQueue!.first, false),
+                            icon: const Icon(Icons.close),
+                            label: const Text('やらない'),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14)),
+                            onPressed: () => decideGoal(_goalQueue!.first, true),
+                            icon: const Icon(Icons.check),
+                            label: const Text('今週やる'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ],
               ),
             ),
@@ -507,6 +694,156 @@ class _TriageCard extends ConsumerWidget {
                         .toList(),
                   ),
                 ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    }
+}
+
+class _GoalTriageCard extends ConsumerWidget {
+  const _GoalTriageCard({required this.goal});
+  final ({String type, int? id}) goal;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isar = ref.read(isarServiceProvider).isar;
+
+    Future<(ShortTerm?, LongTerm?, Dream?, int)> load() async {
+      ShortTerm? st;
+      LongTerm? lt;
+      Dream? dr;
+      int count = 0;
+      if (goal.type == 'none') {
+        // Count unlinked tasks needing triage
+        final list = ref.read(triageTasksProvider);
+        count = list.where((t) => t.shortTermId == null).length;
+        return (st, lt, dr, count);
+      }
+      // Try short term first
+      if (goal.id != null) {
+        st = await isar.shortTerms.get(goal.id!);
+        if (st != null) {
+          if (st.longTermId != null) {
+            lt = await isar.longTerms.get(st.longTermId!);
+            if (lt?.dreamId != null) {
+              dr = await isar.dreams.get(lt!.dreamId!);
+            }
+          }
+          // Count tasks under this ShortTerm
+          final list = ref.read(triageTasksProvider);
+          count = list.where((t) => t.shortTermId == st!.id).length;
+          return (st, lt, dr, count);
+        }
+        // Fallback to long term
+        lt = await isar.longTerms.get(goal.id!);
+        if (lt != null) {
+          if (lt.dreamId != null) {
+            dr = await isar.dreams.get(lt.dreamId!);
+          }
+          // Count tasks whose shortTermId equals this LongTerm id (long-term direct link)
+          final list = ref.read(triageTasksProvider);
+          count = list.where((t) => t.shortTermId == lt!.id).length;
+        }
+      }
+      return (st, lt, dr, count);
+    }
+
+    return FutureBuilder<(ShortTerm?, LongTerm?, Dream?, int)>(
+      future: load(),
+      builder: (context, snapshot) {
+        final st = snapshot.data?.$1;
+        final lt = snapshot.data?.$2;
+        final dr = snapshot.data?.$3;
+        final count = snapshot.data?.$4 ?? 0;
+        String title;
+        IconData icon;
+        if (goal.type == 'none') {
+          title = '未紐づけのタスク';
+          icon = Icons.inbox_outlined;
+        } else if (st != null) {
+          title = st.title;
+          icon = Icons.flag_outlined;
+        } else if (lt != null) {
+          title = lt.title;
+          icon = Icons.emoji_flags_outlined;
+        } else {
+          title = '目標';
+          icon = Icons.flag_outlined;
+        }
+        return Card(
+          elevation: 1,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(title,
+                            style: Theme.of(context).textTheme.titleMedium)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (dr != null || lt != null || st != null)
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 6,
+                    children: [
+                      if (dr != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.lightbulb_outline, size: 16),
+                            const SizedBox(width: 6),
+                            Text('夢: ${dr.title}')
+                          ],
+                        ),
+                      if (lt != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.emoji_flags_outlined, size: 16),
+                            const SizedBox(width: 6),
+                            Text('長期目標: ${lt.title}')
+                          ],
+                        ),
+                      if (st != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.flag_outlined, size: 16),
+                            const SizedBox(width: 6),
+                            Text('短期目標: ${st.title}')
+                          ],
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: Theme.of(context).dividerColor.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.checklist, size: 16),
+                      const SizedBox(width: 6),
+                      Text('対象TODO: $count 件'),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
