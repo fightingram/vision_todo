@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 import '../../models/task.dart';
 import '../../providers/task_providers.dart';
@@ -47,7 +46,7 @@ class _ActivityReportPageState extends ConsumerState<ActivityReportPage> {
         title: const Text('活動記録'),
         actions: [
           IconButton(
-            tooltip: '共有',
+            tooltip: '写真に保存',
             onPressed: () => _shareImage(context),
             icon: const Icon(Icons.ios_share),
           ),
@@ -174,18 +173,31 @@ class _ActivityReportPageState extends ConsumerState<ActivityReportPage> {
       }
       final pngBytes = byteData.buffer.asUint8List();
       final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final xfile = XFile.fromData(
+
+      // Save into the photo library / gallery instead of invoking share sheet.
+      final saveResult = await ImageGallerySaver.saveImage(
         pngBytes,
-        name: 'activity_report_$ts.png',
-        mimeType: 'image/png',
+        name: 'activity_report_$ts',
       );
-      await Share.shareXFiles([xfile], text: '活動記録');
-      // Clean up overlay after sharing
+
+      // Clean up overlay after saving
       entry.remove();
+
+      final bool success = (saveResult is Map)
+          ? (saveResult['isSuccess'] == true || saveResult['isSuccessful'] == true)
+          : (saveResult is bool ? saveResult : false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? '写真ライブラリに保存しました' : '保存に失敗しました'),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('共有エラー: $e')),
+          SnackBar(content: Text('保存エラー: $e')),
         );
       }
     }

@@ -1,5 +1,7 @@
 PODS:
   - Flutter (1.0.0)
+  - image_gallery_saver (2.0.2):
+    - Flutter
   - in_app_review (2.0.0):
     - Flutter
   - isar_flutter_libs (1.0.0):
@@ -16,6 +18,7 @@ PODS:
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
+  - image_gallery_saver (from `.symlinks/plugins/image_gallery_saver/ios`)
   - in_app_review (from `.symlinks/plugins/in_app_review/ios`)
   - isar_flutter_libs (from `.symlinks/plugins/isar_flutter_libs/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
@@ -26,6 +29,8 @@ DEPENDENCIES:
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
+  image_gallery_saver:
+    :path: ".symlinks/plugins/image_gallery_saver/ios"
   in_app_review:
     :path: ".symlinks/plugins/in_app_review/ios"
   isar_flutter_libs:
@@ -41,6 +46,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  image_gallery_saver: cb43cc43141711190510e92c460eb1655cd343cb
   in_app_review: 436034b18594851a7328d7f1c2ed5ec235b79cfc
   isar_flutter_libs: b69f437aeab9c521821c3f376198c4371fa21073
   package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4

@@ -45,5 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Photo Library permissions for saving images -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>活動記録の画像を写真ライブラリに保存します。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>写真ライブラリへ画像を保存するためにアクセスが必要です。</string>
 </dict>
 </plist>
