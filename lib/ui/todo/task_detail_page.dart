@@ -10,6 +10,7 @@ import '../../models/dream.dart';
 import '../../models/tag.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/memo_editor.dart';
+import '../widgets/postit_celebration.dart';
 
 class TaskDetailPage extends ConsumerWidget {
   const TaskDetailPage({super.key, required this.taskId, this.initialTitle});
@@ -193,7 +194,15 @@ class TaskDetailPage extends ConsumerWidget {
                           ChoiceChip(
                             label: const Text('完了'),
                             selected: task.status == TaskStatus.done,
-                            onSelected: (_) => repo.setStatus(task, TaskStatus.done),
+                            onSelected: (_) async {
+                              final wasDone = task.status == TaskStatus.done;
+                              await repo.setStatus(task, TaskStatus.done);
+                              if (!wasDone && context.mounted) {
+                                // Trigger celebration when transitioning to done
+                                // ignore: unawaited_futures
+                                showPostItCelebration(context);
+                              }
+                            },
                           ),
                         ],
                       ),

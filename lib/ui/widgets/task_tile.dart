@@ -6,6 +6,7 @@ import 'package:isar/isar.dart';
 
 import '../../models/task.dart';
 import '../../providers/task_providers.dart';
+import 'postit_celebration.dart';
 
 class TaskTile extends ConsumerWidget {
   const TaskTile({
@@ -73,7 +74,16 @@ class TaskTile extends ConsumerWidget {
       leading: showCheckbox
           ? Checkbox(
               value: task.status == TaskStatus.done,
-              onChanged: (_) => repo.toggleDone(task),
+              onChanged: (_) async {
+                final wasDone = task.status == TaskStatus.done;
+                await repo.toggleDone(task);
+                if (!wasDone && context.mounted) {
+                  // Trigger celebration on mark-as-done
+                  // Best-effort; ignore errors
+                  // ignore: unawaited_futures
+                  showPostItCelebration(context);
+                }
+              },
             )
           : null,
       title: Text(task.title, maxLines: 2, overflow: TextOverflow.ellipsis),

@@ -47,6 +47,7 @@ dependencies:
   share_plus: ^10.0.2
   cross_file: ^0.3.4
   image_gallery_saver: ^2.0.3
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -80,6 +81,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/chara1.PNG
+    # Paper tear sound for completion celebration
+    - assets/sounds/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -7,6 +7,7 @@ import '../../providers/task_providers.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/term_providers.dart';
 import '../../providers/stats_provider.dart';
+import '../../providers/triage_provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../utils/date_utils.dart' as du;
 import '../widgets/add_item_flow.dart';
@@ -91,6 +92,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                         tasks: thisWeek,
                         weekStart: weekStart,
                       ),
+                      const SizedBox(height: 16),
+                      const _TriageReopenSection(),
                     ],
                   ),
                 ),
@@ -630,6 +633,62 @@ class _HomeUnlinkedTasksSectionState
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TriageReopenSection extends ConsumerWidget {
+  const _TriageReopenSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final weekStart = du.startOfWeek(DateTime.now(), settings.weekStart);
+    final untriaged = ref.watch(triageTasksProvider);
+    final skipWeek = ref.watch(triageSkipWeekProvider);
+    final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, weekStart);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0, bottom: 24.0),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Row(
+            children: [
+              const Icon(Icons.playlist_add_check_circle_outlined),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('今週の仕分け',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(
+                      shouldSkip
+                          ? 'この週はスキップ中'
+                          : '未仕分け ${untriaged.length} 件',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton(
+                onPressed: () {
+                  // Force re-triage regardless of prior completion state
+                  ref.read(triageForceProvider.notifier).state = true;
+                  context.push('/triage');
+                },
+                child: const Text('再度実施'),
+              ),
+            ],
+          ),
         ),
       ),
     );

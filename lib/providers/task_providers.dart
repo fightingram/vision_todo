@@ -6,6 +6,7 @@ import '../providers/db_provider.dart';
 import '../providers/settings_provider.dart';
 import '../repositories/task_repository.dart';
 import '../utils/date_utils.dart' as du;
+import '../providers/triage_provider.dart';
 
 final taskRepoProvider = Provider<TaskRepository>((ref) {
   final db = ref.read(isarServiceProvider);
@@ -118,10 +119,16 @@ final taskByIdProvider = StreamProvider.family.autoDispose<Task?, int>((ref, id)
 final triageTasksProvider = Provider.autoDispose<List<Task>>((ref) {
   final list = ref.watch(tasksStreamProvider).value ?? const <Task>[];
   if (list.isEmpty) return const [];
+  final force = ref.watch(triageForceProvider);
+  final excluded = ref.watch(triageSessionExcludedIdsProvider);
   final now = DateTime.now();
   final weekStart = du.startOfWeek(now, ref.read(settingsProvider).weekStart);
-  return list
-      .where((t) => t.status != TaskStatus.done)
+  final base = list.where((t) => t.status != TaskStatus.done);
+  if (force) {
+    // In force mode, exclude tasks already triaged in this session
+    return base.where((t) => !excluded.contains(t.id)).toList();
+  }
+  return base
       .where((t) => t.triagedWeekStart == null || !du.isSameDate(t.triagedWeekStart!, weekStart))
       .toList();
 });
