@@ -22,6 +22,40 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         children: [
+          // リマインダー
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0, top: 16.0),
+            child: Text('リマインダー', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.notifications_outlined),
+                  title: const Text('週はじめに通知'),
+                  subtitle: const Text('「今週はどのタスクをやりますか？」を通知'),
+                  value: settings.weeklyReminderEnabled,
+                  onChanged: (v) => ref.read(settingsProvider.notifier).setWeeklyReminderEnabled(v),
+                ),
+                if (settings.weeklyReminderEnabled) const Divider(height: 1),
+                if (settings.weeklyReminderEnabled)
+                  ListTile(
+                    leading: const Icon(Icons.schedule_outlined),
+                    title: const Text('通知時刻'),
+                    subtitle: Text('${settings.weeklyReminderHour.toString().padLeft(2, '0')}:${settings.weeklyReminderMinute.toString().padLeft(2, '0')}'),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(hour: settings.weeklyReminderHour, minute: settings.weeklyReminderMinute),
+                      );
+                      if (picked != null) {
+                        ref.read(settingsProvider.notifier).setWeeklyReminderTime(picked.hour, picked.minute);
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ),
           // 活動
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0, top: 16.0),
@@ -41,7 +75,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           // 設定
-          // 週の開始（唯一の設定）
+          // 週の開始
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0, top: 16.0),
             child: Text('週の開始', style: Theme.of(context).textTheme.titleMedium),

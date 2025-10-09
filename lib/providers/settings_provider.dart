@@ -10,20 +10,38 @@ class AppSettings {
     this.showCompleted = false,
     this.statusFilter = const {},
     this.priorityFilter = const {},
+    this.weeklyReminderEnabled = true,
+    this.weeklyReminderHour = 9,
+    this.weeklyReminderMinute = 0,
   });
   final WeekStart weekStart;
   final bool animations;
   final bool showCompleted;
   final Set<TaskStatus> statusFilter; // empty = no status filter
   final Set<int> priorityFilter; // empty = no priority filter (0..3)
+  final bool weeklyReminderEnabled;
+  final int weeklyReminderHour;
+  final int weeklyReminderMinute;
 
-  AppSettings copyWith({WeekStart? weekStart, bool? animations, bool? showCompleted, Set<TaskStatus>? statusFilter, Set<int>? priorityFilter}) =>
+  AppSettings copyWith({
+    WeekStart? weekStart,
+    bool? animations,
+    bool? showCompleted,
+    Set<TaskStatus>? statusFilter,
+    Set<int>? priorityFilter,
+    bool? weeklyReminderEnabled,
+    int? weeklyReminderHour,
+    int? weeklyReminderMinute,
+  }) =>
       AppSettings(
         weekStart: weekStart ?? this.weekStart,
         animations: animations ?? this.animations,
         showCompleted: showCompleted ?? this.showCompleted,
         statusFilter: statusFilter ?? this.statusFilter,
         priorityFilter: priorityFilter ?? this.priorityFilter,
+        weeklyReminderEnabled: weeklyReminderEnabled ?? this.weeklyReminderEnabled,
+        weeklyReminderHour: weeklyReminderHour ?? this.weeklyReminderHour,
+        weeklyReminderMinute: weeklyReminderMinute ?? this.weeklyReminderMinute,
       );
 }
 
@@ -40,6 +58,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       state = state.copyWith(priorityFilter: priorities);
   void clearTaskFilters() =>
       state = state.copyWith(statusFilter: {}, priorityFilter: {});
+  void setWeeklyReminderEnabled(bool enabled) =>
+      state = state.copyWith(weeklyReminderEnabled: enabled);
+  void setWeeklyReminderTime(int hour, int minute) =>
+      state = state.copyWith(weeklyReminderHour: hour, weeklyReminderMinute: minute);
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {

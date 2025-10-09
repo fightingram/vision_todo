@@ -19,6 +19,7 @@ import 'providers/settings_provider.dart';
 import 'providers/triage_provider.dart';
 import 'utils/date_utils.dart' as du;
 import 'models/task.dart';
+import 'services/notification_service.dart';
 
 void main() {
   runApp(const ProviderScope(child: App()));
@@ -140,6 +141,17 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       if (next is AsyncData) {
         _startupTriageTriggered = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Initialize local notifications and schedule weekly reminder
+          final settings = ref.read(settingsProvider);
+          NotificationService.instance
+              .ensureWeeklyReminder(
+                enabled: settings.weeklyReminderEnabled,
+                weekStart: settings.weekStart,
+                hour: settings.weeklyReminderHour,
+                minute: settings.weeklyReminderMinute,
+              )
+              .catchError((_) {});
+
           final items = ref.read(triageTasksProvider);
           final ws = du.startOfWeek(
               DateTime.now(), ref.read(settingsProvider).weekStart);
@@ -155,6 +167,18 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
           }
         });
       }
+    });
+
+    // Re-schedule notifications on settings changes
+    ref.listen(settingsProvider, (prev, next) {
+      NotificationService.instance
+          .ensureWeeklyReminder(
+            enabled: next.weeklyReminderEnabled,
+            weekStart: next.weekStart,
+            hour: next.weeklyReminderHour,
+            minute: next.weeklyReminderMinute,
+          )
+          .catchError((_) {});
     });
 
     // 同週内で未仕分けが増えたら自動で開く（オプション）

@@ -48,6 +48,8 @@ dependencies:
   cross_file: ^0.3.4
   image_gallery_saver: ^2.0.3
   audioplayers: ^6.0.0
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
 
 dev_dependencies:
   flutter_test:
