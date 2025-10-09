@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -77,6 +78,8 @@ class TaskTile extends ConsumerWidget {
               onChanged: (_) async {
                 final wasDone = task.status == TaskStatus.done;
                 await repo.toggleDone(task);
+                // Haptic on status change (both to done and back)
+                HapticFeedback.heavyImpact();
                 if (!wasDone && context.mounted) {
                   // Trigger celebration on mark-as-done
                   // Best-effort; ignore errors

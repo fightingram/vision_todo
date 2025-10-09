@@ -1,5 +1,6 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Call this when a task is marked done.
 Future<void> showPostItCelebration(BuildContext context) async {
@@ -49,6 +50,9 @@ class _PostItTearOverlayState extends State<_PostItTearOverlay>
       // Expecting an asset at assets/sounds/paper_tear.wav
       // If not present, ignore error silently.
       // ignore: unawaited_futures
+      // Haptic feedback to enhance sense of accomplishment
+      // Best-effort; on unsupported platforms this is a no-op.
+      HapticFeedback.heavyImpact();
       _player.play(AssetSource('sounds/paper_tear.wav')).catchError((_) {});
       await _splitCtrl.forward();
       await _fadeCtrl.forward();
@@ -191,7 +195,7 @@ class _PostItNoteWidget extends StatelessWidget {
           // text
           Center(
             child: Text(
-              'DONE! ✅',
+              'TODO',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF37474F),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../models/task.dart';
@@ -184,12 +185,20 @@ class TaskDetailPage extends ConsumerWidget {
                           ChoiceChip(
                             label: const Text('未着手'),
                             selected: task.status == TaskStatus.todo,
-                            onSelected: (_) => repo.setStatus(task, TaskStatus.todo),
+                            onSelected: (_) async {
+                              final changing = task.status != TaskStatus.todo;
+                              await repo.setStatus(task, TaskStatus.todo);
+                              if (changing) HapticFeedback.heavyImpact();
+                            },
                           ),
                           ChoiceChip(
                             label: const Text('進行中'),
                             selected: task.status == TaskStatus.doing,
-                            onSelected: (_) => repo.setStatus(task, TaskStatus.doing),
+                            onSelected: (_) async {
+                              final changing = task.status != TaskStatus.doing;
+                              await repo.setStatus(task, TaskStatus.doing);
+                              if (changing) HapticFeedback.heavyImpact();
+                            },
                           ),
                           ChoiceChip(
                             label: const Text('完了'),
@@ -197,6 +206,8 @@ class TaskDetailPage extends ConsumerWidget {
                             onSelected: (_) async {
                               final wasDone = task.status == TaskStatus.done;
                               await repo.setStatus(task, TaskStatus.done);
+                              // Haptic on status change
+                              if (!wasDone) HapticFeedback.heavyImpact();
                               if (!wasDone && context.mounted) {
                                 // Trigger celebration when transitioning to done
                                 // ignore: unawaited_futures
