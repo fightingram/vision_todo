@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dream TODO ウォークスルー</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(to bottom right, #f8fafc, #eff6ff, #ecfdf5);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #e5e7eb;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, #3b82f6, #10b981);
+            transition: width 0.5s ease;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .step-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4b5563;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle-text {
+            font-size: 16px;
+            color: #9ca3af;
+        }
+
+        .visual-box {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            padding: 40px;
+            margin-bottom: 40px;
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* STEP 1: ぐちゃぐちゃなタスク */
+        .chaos-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .chaos-task {
+            position: absolute;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        @keyframes float1 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.7; }
+            50% { transform: translateX(15px) translateY(-20px) rotate(8deg); opacity: 0.5; }
+        }
+        @keyframes float2 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateX(-18px) translateY(15px) rotate(-10deg); opacity: 0.4; }
+        }
+        @keyframes float3 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.65; }
+            50% { transform: translateX(12px) translateY(18px) rotate(6deg); opacity: 0.45; }
+        }
+        @keyframes float4 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.7; }
+            50% { transform: translateX(-14px) translateY(-15px) rotate(-8deg); opacity: 0.5; }
+        }
+        @keyframes float5 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateX(16px) translateY(10px) rotate(7deg); opacity: 0.4; }
+        }
+        @keyframes float6 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.65; }
+            50% { transform: translateX(-16px) translateY(-18px) rotate(-9deg); opacity: 0.45; }
+        }
+        @keyframes float7 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.6; }
+            50% { transform: translateX(18px) translateY(-10px) rotate(5deg); opacity: 0.4; }
+        }
+        @keyframes float8 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.7; }
+            50% { transform: translateX(-12px) translateY(16px) rotate(-7deg); opacity: 0.5; }
+        }
+        @keyframes float9 {
+            0%, 100% { transform: translateX(0) translateY(0) rotate(0deg); opacity: 0.65; }
+            50% { transform: translateX(14px) translateY(12px) rotate(9deg); opacity: 0.45; }
+        }
+
+        .chaos-task:nth-child(1) { animation: float1 3s ease-in-out infinite; }
+        .chaos-task:nth-child(2) { animation: float2 3.5s ease-in-out infinite; }
+        .chaos-task:nth-child(3) { animation: float3 3.2s ease-in-out infinite; }
+        .chaos-task:nth-child(4) { animation: float4 3.8s ease-in-out infinite; }
+        .chaos-task:nth-child(5) { animation: float5 3.3s ease-in-out infinite; }
+        .chaos-task:nth-child(6) { animation: float6 3.7s ease-in-out infinite; }
+        .chaos-task:nth-child(7) { animation: float7 3.4s ease-in-out infinite; }
+        .chaos-task:nth-child(8) { animation: float8 3.6s ease-in-out infinite; }
+        .chaos-task:nth-child(9) { animation: float9 3.1s ease-in-out infinite; }
+        .chaos-task:nth-child(10) { animation: float1 3.4s ease-in-out infinite; }
+        .chaos-task:nth-child(11) { animation: float2 3.1s ease-in-out infinite; }
+        .chaos-task:nth-child(12) { animation: float3 3.6s ease-in-out infinite; }
+        .chaos-task:nth-child(13) { animation: float4 3.3s ease-in-out infinite; }
+        .chaos-task:nth-child(14) { animation: float5 3.7s ease-in-out infinite; }
+        .chaos-task:nth-child(15) { animation: float6 3.2s ease-in-out infinite; }
+        .chaos-task:nth-child(16) { animation: float7 3.8s ease-in-out infinite; }
+        .chaos-task:nth-child(17) { animation: float8 3.5s ease-in-out infinite; }
+        .chaos-task:nth-child(18) { animation: float9 3.3s ease-in-out infinite; }
+        .chaos-task:nth-child(19) { animation: float1 3.6s ease-in-out infinite; }
+        .chaos-task:nth-child(20) { animation: float2 3.4s ease-in-out infinite; }
+        .chaos-task:nth-child(21) { animation: float3 3.7s ease-in-out infinite; }
+        .chaos-task:nth-child(22) { animation: float4 3.2s ease-in-out infinite; }
+        .chaos-task:nth-child(23) { animation: float5 3.8s ease-in-out infinite; }
+
+        /* STEP 2: 階層構造 */
+        .hierarchy-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .hierarchy-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .node-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .node-dream { background: #dbeafe; color: #1e40af; }
+        .node-goal { background: #d1fae5; color: #065f46; }
+        .node-todo { background: #fef3c7; color: #92400e; }
+
+        .node-label {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .hierarchy-line {
+            width: 2px;
+            height: 30px;
+            background: #10b981;
+        }
+
+        /* STEP 3: スワイプ */
+        .swipe-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .swipe-card {
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .swipe-card-left {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #7f1d1d;
+        }
+
+        .swipe-card-right {
+            background: #dcfce7;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+
+        .swipe-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .swipe-hint {
+            font-size: 28px;
+        }
+
+        /* STEP 4: リセット */
+        .reset-calendar {
+            background: linear-gradient(to bottom, #eff6ff, #dbeafe);
+            border: 2px solid #3b82f6;
+            border-radius: 12px;
+            padding: 48px 32px;
+            text-align: center;
+        }
+
+        .reset-text {
+            font-size: 56px;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 12px;
+        }
+
+        .reset-subtext {
+            font-size: 28px;
+            font-weight: 700;
+            color: #10b981;
+        }
+
+        /* STEP 5: CTA */
+        .cta-content {
+            text-align: center;
+        }
+
+        .cta-emoji {
+            font-size: 64px;
+            margin-bottom: 16px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .cta-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+
+        /* ボタン */
+        .button-group {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        button {
+            padding: 12px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-prev {
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .btn-prev:hover {
+            background: #d1d5db;
+        }
+
+        .btn-next {
+            background: linear-gradient(to right, #10b981, #3b82f6);
+            color: white;
+        }
+
+        .btn-next:hover {
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Step dots */
+        .dots {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d1d5db;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background: #10b981;
+            width: 32px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="header">
+            <div class="step-badge">STEP <span id="stepNum">1</span> / 5</div>
+            <h1 id="title"></h1>
+            <p id="subtitle"></p>
+            <p class="subtitle" id="description"></p>
+        </div>
+
+        <div class="visual-box" id="visual"></div>
+
+        <div class="button-group">
+            <button class="btn-prev" id="btnPrev" style="display:none;">戻る</button>
+            <button class="btn-next" id="btnNext"></button>
+        </div>
+
+        <div class="dots" id="dots"></div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const steps = [
+            {
+                title: "頭の中、ぐちゃぐちゃじゃない?",
+                subtitle: "やることが増えるほど、頭が重くなる。",
+                description: "Dream TODO は、まず思考を整理するところから始めます。",
+                buttonText: "次へ"
+            },
+            {
+                title: '"なぜやるか"から整理する。',
+                subtitle: "夢 → 目標 → TODO",
+                description: "行動の前に、目的の構造を見える化します。",
+                buttonText: "次へ"
+            },
+            {
+                title: 'やらないことを決めると、頭が軽くなる。',
+                subtitle: "毎週のトリアージで、今週やらないを選ぶだけ。",
+                description: "やることを減らすと、自然に集中できる。",
+                buttonText: "次へ"
+            },
+            {
+                title: "完璧じゃなく、週ごとに整える。",
+                subtitle: "毎週リセットできるから、完璧を目指さなくていい。",
+                description: "いまの自分に合わせて、考えと行動を整えよう。",
+                buttonText: "次へ"
+            },
+            {
+                title: "思考を整理して、行動を軽くする。",
+                subtitle: "今週のやることを選んでみよう。",
+                description: "ほんの数分で、頭の中がスッキリします。",
+                buttonText: "トリアージを始める"
+            }
+        ];
+
+        const chaosTasksData = [
+            { text: "コーヒー買う", color: "#fca5a5", textColor: "#7f1d1d" },
+            { text: "資料提出", color: "#fdba74", textColor: "#9a3412" },
+            { text: "母に電話", color: "#fcd34d", textColor: "#78350f" },
+            { text: "会議参加", color: "#f9a8d4", textColor: "#831843" },
+            { text: "プレゼン対策", color: "#d8b4fe", textColor: "#581c87" },
+            { text: "洗濯", color: "#93c5fd", textColor: "#1e3a8a" },
+            { text: "メール確認", color: "#fca5a5", textColor: "#7f1d1d" },
+            { text: "書類作成", color: "#c7d2fe", textColor: "#312e81" },
+            { text: "打ち合わせ準備", color: "#86efac", textColor: "#166534" },
+            { text: "食器洗う", color: "#a5f3fc", textColor: "#164e63" },
+            { text: "レポート提出", color: "#bfef45", textColor: "#365314" },
+            { text: "床掃除", color: "#f0abfc", textColor: "#6b21a8" },
+            { text: "営業報告", color: "#fb7185", textColor: "#831843" },
+            { text: "病院予約", color: "#fbbf24", textColor: "#78350f" },
+            { text: "デザイン修正", color: "#2dd4bf", textColor: "#134e4a" },
+            { text: "クライアント連絡", color: "#c4b5fd", textColor: "#5b21b6" },
+            { text: "買い物リスト", color: "#fed7aa", textColor: "#9a3412" },
+            { text: "スライド作成", color: "#7dd3fc", textColor: "#0c4a6e" },
+            { text: "忙しい...", color: "#fbcfe8", textColor: "#831843" },
+            { text: "何から始める?", color: "#fecaca", textColor: "#7f1d1d" },
+            { text: "頭が回らない", color: "#fef08a", textColor: "#78350f" },
+            { text: "優先度？", color: "#bfdbfe", textColor: "#1e3a8a" },
+            { text: "全部大事", color: "#bbf7d0", textColor: "#166534" }
+        ];
+
+        function renderStep() {
+            const step = steps[currentStep];
+            document.getElementById("stepNum").textContent = currentStep + 1;
+            document.getElementById("title").textContent = step.title;
+            document.getElementById("subtitle").textContent = step.subtitle;
+            document.getElementById("description").textContent = step.description;
+            document.getElementById("btnNext").textContent = step.buttonText;
+
+            // Update progress
+            document.getElementById("progressFill").style.width = ((currentStep + 1) / 5) * 100 + "%";
+
+            // Show/hide prev button
+            document.getElementById("btnPrev").style.display = currentStep > 0 ? "block" : "none";
+
+            // Render visual
+            const visualBox = document.getElementById("visual");
+            visualBox.innerHTML = "";
+
+            switch(currentStep) {
+                case 0:
+                    // STEP 1: ぐちゃぐちゃなタスク
+                    const chaosContainer = document.createElement("div");
+                    chaosContainer.className = "chaos-container";
+                    chaosTasksData.forEach((task, idx) => {
+                        const taskEl = document.createElement("div");
+                        taskEl.className = "chaos-task";
+                        taskEl.textContent = task.text;
+                        taskEl.style.backgroundColor = task.color;
+                        taskEl.style.color = task.textColor;
+                        taskEl.style.left = (Math.random() * 80) + "%";
+                        taskEl.style.top = (Math.random() * 80) + "%";
+                        chaosContainer.appendChild(taskEl);
+                    });
+                    visualBox.appendChild(chaosContainer);
+                    break;
+
+                case 1:
+                    // STEP 2: 階層構造
+                    const hierarchy = document.createElement("div");
+                    hierarchy.className = "hierarchy-diagram";
+                    hierarchy.innerHTML = `
+                        <div class="hierarchy-node">
+                            <div class="node-circle node-dream">Dream</div>
+                            <div class="node-label">方向性</div>
+                        </div>
+                        <div class="hierarchy-line"></div>
+                        <div class="hierarchy-node">
+                            <div class="node-circle node-goal">Goal</div>
+                            <div class="node-label">道筋</div>
+                        </div>
+                        <div class="hierarchy-line"></div>
+                        <div class="hierarchy-node">
+                            <div class="node-circle node-todo">TODO</div>
+                            <div class="node-label">一歩</div>
+                        </div>
+                    `;
+                    visualBox.appendChild(hierarchy);
+                    break;
+
+                case 2:
+                    // STEP 3: スワイプ
+                    const swipeContainer = document.createElement("div");
+                    swipeContainer.className = "swipe-container";
+                    swipeContainer.innerHTML = `
+                        <div class="swipe-card swipe-card-left">
+                            <div>
+                                <div class="swipe-title">SNS投稿の整理</div>
+                                <div>今週は見送る</div>
+                            </div>
+                            <div class="swipe-hint">←X→</div>
+                        </div>
+                        <div class="swipe-card swipe-card-right">
+                            <div>
+                                <div class="swipe-title">チームミーティング</div>
+                                <div>今週の優先事項</div>
+                            </div>
+                            <div class="swipe-hint">←X→</div>
+                        </div>
+                        <div style="text-align: center; font-size: 14px; color: #9ca3af; margin-top: 16px;">
+                            ← やらない　　　　やる →
+                        </div>
+                    `;
+                    visualBox.appendChild(swipeContainer);
+                    break;
+
+                case 3:
+                    // STEP 4: リセット
+                    const reset = document.createElement("div");
+                    reset.className = "reset-calendar";
+                    reset.innerHTML = `
+                        <div class="reset-text">Week</div>
+                        <div class="reset-subtext">Fresh Start</div>
+                    `;
+                    visualBox.appendChild(reset);
+                    break;
+
+                case 4:
+                    // STEP 5: CTA
+                    const cta = document.createElement("div");
+                    cta.className = "cta-content";
+                    cta.innerHTML = `
+                        <div class="cta-emoji">✨</div>
+                        <div class="cta-title">思考がスッキリ</div>
+                        <p style="color: #6b7280;">ほんの数分で、頭の中が整理され、行動が軽くなります。</p>
+                    `;
+                    visualBox.appendChild(cta);
+                    break;
+            }
+
+            // Update dots
+            const dotsContainer = document.getElementById("dots");
+            dotsContainer.innerHTML = "";
+            for (let i = 0; i < 5; i++) {
+                const dot = document.createElement("div");
+                dot.className = "dot" + (i === currentStep ? " active" : "");
+                dot.onclick = () => {
+                    currentStep = i;
+                    renderStep();
+                };
+                dotsContainer.appendChild(dot);
+            }
+        }
+
+        document.getElementById("btnNext").onclick = () => {
+            if (currentStep < 4) {
+                currentStep++;
+                renderStep();
+            }
+        };
+
+        document.getElementById("btnPrev").onclick = () => {
+            if (currentStep > 0) {
+                currentStep--;
+                renderStep();
+            }
+        };
+
+        renderStep();
+    </script>
+</body>
+</html>

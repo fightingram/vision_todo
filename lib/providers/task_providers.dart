@@ -14,9 +14,17 @@ final taskRepoProvider = Provider<TaskRepository>((ref) {
 });
 
 final tasksStreamProvider = StreamProvider.autoDispose<List<Task>>((ref) {
-  final repo = ref.read(taskRepoProvider);
-  final showCompleted = ref.watch(settingsProvider.select((s) => s.showCompleted));
-  return repo.watchAll(includeDone: showCompleted);
+  // Wait for DB initialization before accessing Isar
+  final init = ref.watch(isarInitProvider);
+  return init.when(
+    data: (_) {
+      final repo = ref.read(taskRepoProvider);
+      final showCompleted = ref.watch(settingsProvider.select((s) => s.showCompleted));
+      return repo.watchAll(includeDone: showCompleted);
+    },
+    loading: () => const Stream.empty(),
+    error: (_, __) => const Stream.empty(),
+  );
 });
 
 // Always include done; used for rich filtering

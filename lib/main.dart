@@ -11,6 +11,7 @@ import 'ui/todo/task_detail_page.dart';
 import 'ui/maps/maps_page.dart';
 import 'ui/dreams/dream_detail_page.dart';
 import 'ui/triage/triage_page.dart';
+import 'ui/walkthrough/walkthrough_page.dart';
 import 'ui/settings/settings_page.dart';
 import 'ui/settings/activity_report_page.dart';
 import 'providers/task_providers.dart';
@@ -20,6 +21,7 @@ import 'providers/triage_provider.dart';
 import 'utils/date_utils.dart' as du;
 import 'models/task.dart';
 import 'services/notification_service.dart';
+import 'providers/prefs_provider.dart';
 
 void main() {
   runApp(const ProviderScope(child: App()));
@@ -36,8 +38,12 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   bool _startupTriageTriggered = false;
   DateTime? _lastHandledWeekStart;
   bool _triagePushInProgress = false;
+  bool _walkthroughPushInProgress = false;
   int _lastKnownTriageCount = 0;
   late final GoRouter _router;
+  ProviderSubscription<AsyncValue<void>>? _isarInitSub;
+  ProviderSubscription<AppSettings>? _settingsSub;
+  ProviderSubscription<List<Task>>? _triageSub;
 
   @override
   void initState() {
@@ -52,6 +58,13 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
           name: 'triage',
           pageBuilder: (context, state) => const NoTransitionPage(
             child: TriagePage(),
+          ),
+        ),
+        GoRoute(
+          path: '/walkthrough',
+          name: 'walkthrough',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: WalkthroughPage(),
           ),
         ),
         ShellRoute(
@@ -136,11 +149,11 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       ],
     );
     // アプリ起動時（DB初期化直後）に一度だけチェックして開く
-    ref.listen<AsyncValue<void>>(isarInitProvider, (prev, next) {
+    _isarInitSub = ref.listenManual<AsyncValue<void>>(isarInitProvider, (prev, next) {
       if (_startupTriageTriggered) return;
       if (next is AsyncData) {
         _startupTriageTriggered = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
           // Initialize local notifications and schedule weekly reminder
           final settings = ref.read(settingsProvider);
           NotificationService.instance
@@ -152,25 +165,56 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
               )
               .catchError((_) {});
 
-          final items = ref.read(triageTasksProvider);
-          final ws = du.startOfWeek(
-              DateTime.now(), ref.read(settingsProvider).weekStart);
-          _lastHandledWeekStart = ws;
-          _lastKnownTriageCount = items.length;
-          final skipWeek = ref.read(triageSkipWeekProvider);
-          final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, ws);
-          if (mounted && items.isNotEmpty && !shouldSkip) {
-            _triagePushInProgress = true;
-            _router.push('/triage').whenComplete(() {
-              _triagePushInProgress = false;
+          // Show walkthrough on first launch
+          final prefs = ref.read(prefsServiceProvider);
+          final seen = await prefs.getWalkthroughSeen();
+          if (!seen && mounted) {
+            _walkthroughPushInProgress = true;
+            // Push walkthrough first, then consider triage afterwards
+            _router.push('/walkthrough').whenComplete(() async {
+              _walkthroughPushInProgress = false;
+              // After walkthrough, decide whether to open triage
+              final itemsAfter = ref.read(triageTasksProvider);
+              final wsAfter = du.startOfWeek(
+                  DateTime.now(), ref.read(settingsProvider).weekStart);
+              _lastHandledWeekStart = wsAfter;
+              _lastKnownTriageCount = itemsAfter.length;
+              final skipWeekAfter = ref.read(triageSkipWeekProvider);
+              final shouldSkipAfter =
+                  skipWeekAfter != null && du.isSameDate(skipWeekAfter, wsAfter);
+              if (mounted && itemsAfter.isNotEmpty && !shouldSkipAfter) {
+                _triagePushInProgress = true;
+                _router.push('/triage').whenComplete(() {
+                  _triagePushInProgress = false;
+                });
+              }
+              // Start listening triage changes after DB init
+              _ensureTriageListener();
             });
+          } else {
+            // Normal triage auto-open path
+            final items = ref.read(triageTasksProvider);
+            final ws = du.startOfWeek(
+                DateTime.now(), ref.read(settingsProvider).weekStart);
+            _lastHandledWeekStart = ws;
+            _lastKnownTriageCount = items.length;
+            final skipWeek = ref.read(triageSkipWeekProvider);
+            final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, ws);
+            if (mounted && items.isNotEmpty && !shouldSkip) {
+              _triagePushInProgress = true;
+              _router.push('/triage').whenComplete(() {
+                _triagePushInProgress = false;
+              });
+            }
+            // Start listening triage changes after DB init
+            _ensureTriageListener();
           }
         });
       }
     });
 
     // Re-schedule notifications on settings changes
-    ref.listen(settingsProvider, (prev, next) {
+    _settingsSub = ref.listenManual(settingsProvider, (prev, next) {
       NotificationService.instance
           .ensureWeeklyReminder(
             enabled: next.weeklyReminderEnabled,
@@ -181,14 +225,17 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
           .catchError((_) {});
     });
 
-    // 同週内で未仕分けが増えたら自動で開く（オプション）
-    ref.listen<List<Task>>(triageTasksProvider, (prev, next) {
+    // triageTasks の自動表示は DB 初期化後に購読を開始する
+  }
+
+  void _ensureTriageListener() {
+    if (_triageSub != null) return;
+    _triageSub = ref.listenManual<List<Task>>(triageTasksProvider, (prev, next) {
       if (!_startupTriageTriggered) return; // 起動直後の初期化が完了してから
       final settings = ref.read(settingsProvider);
       final currentWeek = du.startOfWeek(DateTime.now(), settings.weekStart);
       // 同週のみ対象
-      if (_lastHandledWeekStart == null ||
-          !du.isSameDate(_lastHandledWeekStart!, currentWeek)) {
+      if (_lastHandledWeekStart == null || !du.isSameDate(_lastHandledWeekStart!, currentWeek)) {
         // 週が変わった場合はここではカウントだけ更新
         _lastKnownTriageCount = next.length;
         return;
@@ -196,11 +243,10 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       final prevLen = (prev?.length ?? 0);
       final nextLen = (next?.length ?? 0);
       final increased = nextLen > prevLen;
-      // 既にトリアージ画面、または遷移中なら何もしない
+      // 既に仕分け画面、または遷移中なら何もしない
       final skipWeek = ref.read(triageSkipWeekProvider);
-      final shouldSkip =
-          skipWeek != null && du.isSameDate(skipWeek, currentWeek);
-      if (increased && nextLen > 0 && !_triagePushInProgress && !shouldSkip) {
+      final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, currentWeek);
+      if (increased && nextLen > 0 && !_triagePushInProgress && !_walkthroughPushInProgress && !shouldSkip) {
         final loc = _router.routeInformationProvider.value.location ?? '';
         if (!loc.startsWith('/triage') && mounted) {
           _triagePushInProgress = true;
@@ -217,6 +263,9 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _isarInitSub?.close();
+    _settingsSub?.close();
+    _triageSub?.close();
     super.dispose();
   }
 
@@ -252,7 +301,7 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
         final skipWeek = ref.read(triageSkipWeekProvider);
         final shouldSkip =
             skipWeek != null && du.isSameDate(skipWeek, weekStartNow);
-        if (increased && nextLen > 0 && !_triagePushInProgress && !shouldSkip) {
+        if (increased && nextLen > 0 && !_triagePushInProgress && !_walkthroughPushInProgress && !shouldSkip) {
           final loc = _router.routeInformationProvider.value.location ?? '';
           if (!loc.startsWith('/triage') && mounted) {
             _triagePushInProgress = true;

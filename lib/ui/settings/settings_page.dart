@@ -22,6 +22,23 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         children: [
+          // ガイド
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0, top: 8.0),
+            child: Text('ガイド', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: const Text('ウォークスルーを見る'),
+                  subtitle: const Text('アプリの考え方と使い方の流れ'),
+                  onTap: () => context.push('/walkthrough'),
+                ),
+              ],
+            ),
+          ),
           // リマインダー
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0, top: 16.0),

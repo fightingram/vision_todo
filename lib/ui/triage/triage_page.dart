@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/task.dart';
 import '../../models/short_term.dart';
@@ -37,6 +38,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
   List<({String type, int? id})>? _goalQueue;
   int? _goalInitialCount;
   final Set<({String type, int? id})> _selectedGoals = {};
+  // no cleanup flags; cleanup is triggered on user actions instead of lifecycle
 
   @override
   void initState() {
@@ -48,13 +50,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     });
   }
 
-  @override
-  void dispose() {
-    // Reset forced mode and session state when leaving triage
-    ref.read(triageSessionExcludedIdsProvider.notifier).state = <int>{};
-    ref.read(triageForceProvider.notifier).state = false;
-    super.dispose();
-  }
+  // Avoid modifying providers in lifecycle hooks; handled on user actions instead.
 
   @override
   Widget build(BuildContext context) {
@@ -122,57 +118,65 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     _goalInitialCount ??= _goalQueue!.length;
 
     void decide(Task t, bool planned) async {
+      final force = ref.read(triageForceProvider);
       await repo.setTriageDecision(t, weekStart, planned: planned);
+      if (!mounted) return;
       setState(() {
         _queue.removeWhere((e) => e.id == t.id);
       });
       // In forced mode, mark this task excluded for the session so it won't reappear
-      final force = ref.read(triageForceProvider);
-      if (force) {
+      if (force && mounted) {
         final set = {...ref.read(triageSessionExcludedIdsProvider)};
         set.add(t.id);
         ref.read(triageSessionExcludedIdsProvider.notifier).state = set;
       }
-      if (_queue.isEmpty && mounted) Navigator.of(context).pop();
+      if (_queue.isEmpty && mounted) {
+        // Cleanup forced state on exit
+        ref.read(triageSessionExcludedIdsProvider.notifier).state = <int>{};
+        ref.read(triageForceProvider.notifier).state = false;
+        context.pop();
+      }
     }
 
     // When deciding a goal: add to selected set if planned; then advance
-    void decideGoal(({String type, int? id}) g, bool planned) {
-      setState(() {
-        if (planned) {
-          var resolvedType = g.type;
-          if (resolvedType == 'unknown' && g.id != null) {
-            if (childIdSet.contains(g.id!)) {
-              resolvedType = 'st';
-            } else if (topIdSet.contains(g.id!)) {
-              resolvedType = 'lt';
-            }
+    void decideGoal(({String type, int? id}) g, bool planned) async {
+      if (planned) {
+        var resolvedType = g.type;
+        if (resolvedType == 'unknown' && g.id != null) {
+          if (childIdSet.contains(g.id!)) {
+            resolvedType = 'st';
+          } else if (topIdSet.contains(g.id!)) {
+            resolvedType = 'lt';
           }
-          _selectedGoals.add((type: resolvedType, id: g.id));
-        } else {
-          // If goal is rejected, immediately unplan its tasks for this week
-          () async {
-            // Use current triage queue (already excludes done) to avoid unsupported filter
-            List<Task> target = const [];
-            if (g.type == 'none') {
-              target = _queue.where((t) => t.shortTermId == null).toList();
-            } else if (g.id != null) {
-              target = _queue.where((t) => t.shortTermId == g.id).toList();
-            }
-            for (final t in target) {
-              await repo.setTriageDecision(t, weekStart, planned: false);
-            }
-            // In forced mode, exclude these tasks for the rest of session
-            final force = ref.read(triageForceProvider);
-            if (force && target.isNotEmpty) {
-              final excl = {...ref.read(triageSessionExcludedIdsProvider)};
-              for (final t in target) {
-                excl.add(t.id);
-              }
-              ref.read(triageSessionExcludedIdsProvider.notifier).state = excl;
-            }
-          }();
         }
+        if (!mounted) return;
+        setState(() {
+          _selectedGoals.add((type: resolvedType, id: g.id));
+        });
+      } else {
+        // If goal is rejected, immediately unplan its tasks for this week
+        // Use current triage queue (already excludes done) to avoid unsupported filter
+        List<Task> target = const [];
+        if (g.type == 'none') {
+          target = _queue.where((t) => t.shortTermId == null).toList();
+        } else if (g.id != null) {
+          target = _queue.where((t) => t.shortTermId == g.id).toList();
+        }
+        for (final t in target) {
+          await repo.setTriageDecision(t, weekStart, planned: false);
+        }
+        // In forced mode, exclude these tasks for the rest of session
+        final force = ref.read(triageForceProvider);
+        if (force && target.isNotEmpty && mounted) {
+          final excl = {...ref.read(triageSessionExcludedIdsProvider)};
+          for (final t in target) {
+            excl.add(t.id);
+          }
+          ref.read(triageSessionExcludedIdsProvider.notifier).state = excl;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
         _goalQueue!.remove(g);
         if (_goalQueue!.isEmpty) {
           // Move to tasks stage, scoped to selected goals
@@ -226,7 +230,29 @@ class _TriagePageState extends ConsumerState<TriagePage> {
       ),
       body: ((_stage == _Stage.tasks && _queue.isEmpty) ||
               (_stage == _Stage.goals && (_goalQueue == null || _goalQueue!.isEmpty)))
-          ? const Center(child: Text('今週の仕分けは完了しました'))
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.inbox_outlined, size: 40, color: DT.textSecondary),
+                    const SizedBox(height: 12),
+                    const Text('トリアージの対象がありません。'),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () {
+                        // Cleanup forced state explicitly before navigating home
+                        ref.read(triageSessionExcludedIdsProvider.notifier).state = <int>{};
+                        ref.read(triageForceProvider.notifier).state = false;
+                        context.go('/home');
+                      },
+                      child: const Text('Homeへ'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Column(
@@ -288,33 +314,51 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Swipe hint
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: DT.bgTint,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: DT.borderSubtle),
+                  // Stage hint
+                  if (_stage == _Stage.tasks)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: DT.bgTint,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: DT.borderSubtle),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: const [
+                          Row(children: [
+                            Text('左: やらない'),
+                            SizedBox(width: 6),
+                            Icon(Icons.swipe_left,
+                                size: 18, color: DT.stateDanger)
+                          ]),
+                          Row(children: [
+                            Icon(Icons.swipe_right,
+                                size: 18, color: DT.stateSuccess),
+                            SizedBox(width: 6),
+                            Text('右: 今週やる')
+                          ]),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: DT.bgTint,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: DT.borderSubtle),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.fact_check, size: 18, color: DT.textSecondary),
+                          SizedBox(width: 8),
+                          Text('目標にチェックをつけて「次へ」')
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Row(children: [
-                          Text('左: やらない'),
-                          SizedBox(width: 6),
-                          Icon(Icons.swipe_left,
-                              size: 18, color: DT.stateDanger)
-                        ]),
-                        Row(children: [
-                          Icon(Icons.swipe_right,
-                              size: 18, color: DT.stateSuccess),
-                          SizedBox(width: 6),
-                          Text('右: 今週やる')
-                        ]),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 12),
                   if (_stage == _Stage.tasks) ...[
                     // Context chain (outside of card): Dream / Goals
@@ -502,102 +546,191 @@ class _TriagePageState extends ConsumerState<TriagePage> {
                     const SizedBox(height: 8),
                   ]
                   else ...[
-                    // Goals stage
+                    // Goals stage (checklist)
                     Expanded(
-                      child: Dismissible(
-                        key: ValueKey('${_goalQueue!.first.type}:${_goalQueue!.first.id ?? 'none'}'),
-                        direction: DismissDirection.horizontal,
-                        onDismissed: (dir) {
-                          decideGoal(_goalQueue!.first,
-                              dir == DismissDirection.startToEnd);
-                        },
-                        background: Align(
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            heightFactor: 0.75,
-                            widthFactor: 1.0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3CB371).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color: const Color(0xFF3CB371).withOpacity(0.35)),
+                      child: Builder(builder: (context) {
+                        // Build quick lookup for labels from loaded terms
+                        final childTermsList =
+                            ref.watch(allChildTermsProvider).value ?? const [];
+                        final topTermsList =
+                            ref.watch(allTopTermsProvider).value ?? const [];
+                        final childTitleById = {
+                          for (final t in childTermsList) t.id: t.title
+                        };
+                        final topTitleById = {
+                          for (final t in topTermsList) t.id: t.title
+                        };
+                        String goalLabel(({String type, int? id}) g) {
+                          if (g.type == 'none') return '未紐づけのタスク';
+                          final id = g.id;
+                          if (id == null) return '目標';
+                          final ct = childTitleById[id];
+                          if (ct != null) return ct;
+                          final tt = topTitleById[id];
+                          if (tt != null) return tt;
+                          return '目標';
+                        }
+                        IconData goalIcon(({String type, int? id}) g) {
+                          if (g.type == 'none') return Icons.inbox_outlined;
+                          // Infer by membership
+                          final id = g.id;
+                          if (id != null && childTitleById.containsKey(id)) {
+                            return Icons.flag_outlined;
+                          }
+                          if (id != null && topTitleById.containsKey(id)) {
+                            return Icons.emoji_flags_outlined;
+                          }
+                          return Icons.flag_outlined;
+                        }
+                        int goalTaskCount(({String type, int? id}) g) {
+                          if (g.type == 'none') {
+                            return _queue.where((t) => t.shortTermId == null).length;
+                          }
+                          if (g.id == null) return 0;
+                          return _queue.where((t) => t.shortTermId == g.id).length;
+                        }
+
+                        return ListView.separated(
+                          itemCount: _goalQueue!.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final g = _goalQueue![index];
+                            final selected = _selectedGoals.contains(g);
+                            return CheckboxListTile(
+                              value: selected,
+                              onChanged: (v) {
+                                setState(() {
+                                  if (v == true) {
+                                    // Normalize type based on membership if unknown
+                                    var resolvedType = g.type;
+                                    if (resolvedType == 'unknown' && g.id != null) {
+                                      if (childTitleById.containsKey(g.id)) {
+                                        resolvedType = 'st';
+                                      } else if (topTitleById.containsKey(g.id)) {
+                                        resolvedType = 'lt';
+                                      }
+                                    }
+                                    _selectedGoals.add((type: resolvedType, id: g.id));
+                                  } else {
+                                    _selectedGoals.remove(g);
+                                  }
+                                });
+                              },
+                              dense: false,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Row(
+                                children: [
+                                  Icon(goalIcon(g), size: 18, color: DT.textSecondary),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(goalLabel(g))),
+                                ],
                               ),
-                              alignment: Alignment.centerLeft,
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
-                              child: const Row(children: [
-                                Icon(Icons.check_circle,
-                                    size: 28, color: Color(0xFF3CB371)),
-                                SizedBox(width: 8),
-                                Text('今週やる')
-                              ]),
-                            ),
-                          ),
-                        ),
-                        secondaryBackground: Align(
-                          alignment: Alignment.centerRight,
-                          child: FractionallySizedBox(
-                            heightFactor: 0.75,
-                            widthFactor: 1.0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE25555).withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color: const Color(0xFFE25555).withOpacity(0.35)),
-                              ),
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
-                              child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text('やらない'),
-                                    SizedBox(width: 8),
-                                    Icon(Icons.cancel,
-                                        color: Color(0xFFE25555), size: 26)
-                                  ]),
-                            ),
-                          ),
-                        ),
-                        child: Align(
-                          alignment: Alignment.center,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 600),
-                            child: FractionallySizedBox(
-                              heightFactor: 0.75,
-                              alignment: Alignment.center,
-                              child: _GoalTriageCard(goal: _goalQueue!.first),
-                            ),
-                          ),
-                        ),
-                      ),
+                              subtitle: Text('対象のTODO: ${goalTaskCount(g)} 件'),
+                            );
+                          },
+                        );
+                      }),
                     ),
                     const SizedBox(height: 8),
                     _TriageProgress(
-                        total: _goalInitialCount ?? 0,
-                        remaining: _goalQueue!.length),
+                      total: _goalInitialCount ?? _goalQueue!.length,
+                      remaining:
+                          (_goalInitialCount ?? _goalQueue!.length) - _selectedGoals.length,
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14)),
-                            onPressed: () => decideGoal(_goalQueue!.first, false),
-                            icon: const Icon(Icons.close),
-                            label: const Text('やらない'),
+                                padding: const EdgeInsets.symmetric(vertical: 14)),
+                            onPressed: () {
+                              setState(() {
+                                if (_selectedGoals.length == _goalQueue!.length) {
+                                  _selectedGoals.clear();
+                                } else {
+                                  _selectedGoals
+                                    ..clear()
+                                    ..addAll(_goalQueue!);
+                                }
+                              });
+                            },
+                            icon: const Icon(Icons.select_all),
+                            label: Text(_selectedGoals.length == _goalQueue!.length
+                                ? '選択解除'
+                                : '全て選択'),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: FilledButton.icon(
                             style: FilledButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14)),
-                            onPressed: () => decideGoal(_goalQueue!.first, true),
-                            icon: const Icon(Icons.check),
-                            label: const Text('今週やる'),
+                                padding: const EdgeInsets.symmetric(vertical: 14)),
+                            onPressed: () async {
+                              // Proceed to tasks stage: auto-unplan unselected goals' tasks
+                              final repo = ref.read(taskRepoProvider);
+                              final weekStart = du.startOfWeek(
+                                  DateTime.now(), ref.read(settingsProvider).weekStart);
+                              final unselected = _goalQueue!
+                                  .where((g) => !_selectedGoals.contains(g))
+                                  .toList();
+
+                              // Collect tasks from current triage queue to avoid unsupported filters
+                              final force = ref.read(triageForceProvider);
+                              final excl = {...ref.read(triageSessionExcludedIdsProvider)};
+
+                              for (final g in unselected) {
+                                List<Task> target = const [];
+                                if (g.type == 'none') {
+                                  target = _queue
+                                      .where((t) => t.shortTermId == null)
+                                      .toList();
+                                } else if (g.id != null) {
+                                  target = _queue
+                                      .where((t) => t.shortTermId == g.id)
+                                      .toList();
+                                }
+                                for (final t in target) {
+                                  await repo.setTriageDecision(t, weekStart, planned: false);
+                                  if (force) {
+                                    excl.add(t.id);
+                                  }
+                                }
+                              }
+                              if (force) {
+                                ref.read(triageSessionExcludedIdsProvider.notifier).state = excl;
+                              }
+
+                              // Move to tasks stage, scoped to selected goals
+                              setState(() {
+                                _stage = _Stage.tasks;
+                                if (_selectedGoals.isNotEmpty) {
+                                  final selectedNone =
+                                      _selectedGoals.any((g) => g.type == 'none');
+                                  final stIds = {
+                                    for (final gg in _selectedGoals)
+                                      if (gg.type == 'st' && gg.id != null) gg.id!
+                                  };
+                                  final ltIds = {
+                                    for (final gg in _selectedGoals)
+                                      if (gg.type == 'lt' && gg.id != null) gg.id!
+                                  };
+                                  _queue = _queue.where((t) {
+                                    if (t.shortTermId == null) return selectedNone;
+                                    final id = t.shortTermId!;
+                                    if (childIdSet.contains(id)) return stIds.contains(id);
+                                    if (topIdSet.contains(id)) return ltIds.contains(id);
+                                    return false;
+                                  }).toList();
+                                  _initialCount = _queue.length;
+                                } else {
+                                  _queue = [];
+                                  _initialCount = 0;
+                                }
+                              });
+                            },
+                            icon: const Icon(Icons.arrow_forward),
+                            label: const Text('次へ'),
                           ),
                         ),
                       ],

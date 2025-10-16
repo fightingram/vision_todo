@@ -61,6 +61,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         data: (_) => LayoutBuilder(
           builder: (context, constraints) {
             final tasks = ref.watch(tasksStreamProvider).value ?? const [];
+            final allTasks = ref.watch(allTasksStreamProvider).value ?? const [];
+            final activeCount =
+                allTasks.where((t) => t.status != TaskStatus.done).length;
             final weekStart =
                 du.startOfWeek(DateTime.now(), settings.weekStart);
             final thisWeek = tasks
@@ -79,6 +82,52 @@ class _HomePageState extends ConsumerState<HomePage> {
                 if (byDue != 0) return byDue;
                 return a.createdAt.compareTo(b.createdAt);
               });
+
+            // Empty state: No active (non-done) TODOs exist
+            if (activeCount == 0) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.auto_awesome_outlined,
+                            size: 48, color: DT.textSecondary),
+                        const SizedBox(height: 12),
+                        Text('まずは追加してはじめましょう',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 6),
+                        Text(
+                          '夢 / 目標 / TODO を作成して、今週の計画に備えましょう。',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: DT.textSecondary),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            icon: const Icon(Icons.add),
+                            onPressed: () async => AddItemFlow.show(context, ref),
+                            label: const Text('追加する'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () => context.push('/walkthrough'),
+                          icon: const Icon(Icons.menu_book_outlined),
+                          label: const Text('ウォークスルーを見る'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
             return Column(
               children: [
                 const _DreamsHeaderStrip(),
@@ -649,6 +698,9 @@ class _TriageReopenSection extends ConsumerWidget {
     final untriaged = ref.watch(triageTasksProvider);
     final skipWeek = ref.watch(triageSkipWeekProvider);
     final shouldSkip = skipWeek != null && du.isSameDate(skipWeek, weekStart);
+
+    // TODO が無い場合は「今週の仕分け」を非表示
+    if (untriaged.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: 4.0, bottom: 24.0),
