@@ -39,13 +39,15 @@ class _WalkthroughPageState extends ConsumerState<WalkthroughPage> {
 
   void _next() {
     if (_index < 4) {
-      _controller.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _controller.nextPage(
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
   }
 
   void _prev() {
     if (_index > 0) {
-      _controller.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _controller.previousPage(
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
   }
 
@@ -58,7 +60,7 @@ class _WalkthroughPageState extends ConsumerState<WalkthroughPage> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Dream TODO ウォークスルー'),
+        title: const Text('Dream TODO'),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -168,7 +170,8 @@ class _ChaosTasks extends StatefulWidget {
   State<_ChaosTasks> createState() => _ChaosTasksState();
 }
 
-class _ChaosTasksState extends State<_ChaosTasks> with SingleTickerProviderStateMixin {
+class _ChaosTasksState extends State<_ChaosTasks>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ac;
   late final Animation<double> _anim;
   late final List<_ChaosItem> _items;
@@ -176,7 +179,9 @@ class _ChaosTasksState extends State<_ChaosTasks> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 3200))..repeat();
+    _ac = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 3200))
+      ..repeat();
     _anim = CurvedAnimation(parent: _ac, curve: Curves.easeInOut);
     final seeds = [
       ('コーヒー買う', 0xfffca5a5, 0xff7f1d1d),
@@ -236,7 +241,8 @@ class _ChaosTasksState extends State<_ChaosTasks> with SingleTickerProviderState
       aspectRatio: 16 / 9,
       child: Card(
         elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DT.radiusL)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DT.radiusL)),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: LayoutBuilder(builder: (context, bc) {
@@ -249,8 +255,16 @@ class _ChaosTasksState extends State<_ChaosTasks> with SingleTickerProviderState
                   children: [
                     for (final it in _items)
                       Positioned(
-                        left: (it.baseX * w + it.ampX * math.sin(_anim.value * 2 * math.pi + it.phase)).clamp(0.0, w - 120),
-                        top: (it.baseY * h + it.ampY * math.cos(_anim.value * 2 * math.pi + it.phase)).clamp(0.0, h - 32),
+                        left: (it.baseX * w +
+                                it.ampX *
+                                    math.sin(
+                                        _anim.value * 2 * math.pi + it.phase))
+                            .clamp(0.0, w - 120),
+                        top: (it.baseY * h +
+                                it.ampY *
+                                    math.cos(
+                                        _anim.value * 2 * math.pi + it.phase))
+                            .clamp(0.0, h - 32),
                         child: _chaosPill(it),
                       ),
                   ],
@@ -269,9 +283,12 @@ class _ChaosTasksState extends State<_ChaosTasks> with SingleTickerProviderState
       decoration: BoxDecoration(
         color: it.color,
         borderRadius: BorderRadius.circular(10),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+        ],
       ),
-      child: Text(it.label, style: TextStyle(color: it.text, fontWeight: FontWeight.w600)),
+      child: Text(it.label,
+          style: TextStyle(color: it.text, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -309,11 +326,12 @@ class _StepTwo extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('🧠 STEP 2：なぜやるかから考える', style: theme.textTheme.titleMedium),
+          Text('STEP2：目的を思い出す（内省）', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          Text('“なぜやるか”から整理する。', style: theme.textTheme.headlineSmall),
+          Text('“なぜやるのか”を見つけることで、TODOが意味を持つ。',
+              style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
-          Text('夢 → 目標 → TODO。行動の前に、“目的の構造”を見える化します。'),
+          Text('Dream TODO は、やることの前に“自分の理由”を整理します。'),
           const SizedBox(height: 16),
           Expanded(
             child: Center(
@@ -335,14 +353,17 @@ class _NodeDiagram extends StatefulWidget {
   State<_NodeDiagram> createState() => _NodeDiagramState();
 }
 
-class _NodeDiagramState extends State<_NodeDiagram> with SingleTickerProviderStateMixin {
+class _NodeDiagramState extends State<_NodeDiagram>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ac;
   late final Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
+    _ac = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1600))
+      ..repeat(reverse: true);
     _anim = CurvedAnimation(parent: _ac, curve: Curves.easeInOut);
   }
 
@@ -358,7 +379,8 @@ class _NodeDiagramState extends State<_NodeDiagram> with SingleTickerProviderSta
       aspectRatio: 16 / 9,
       child: Card(
         elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DT.radiusL)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DT.radiusL)),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: LayoutBuilder(
@@ -366,23 +388,44 @@ class _NodeDiagramState extends State<_NodeDiagram> with SingleTickerProviderSta
               final w = bc.maxWidth;
               final h = bc.maxHeight;
               // Nodes
-              final dream = _MMNode(label: '夢', icon: Icons.lightbulb_outline, pos: Offset(w * 0.18, h * 0.5));
-              final goal1 = _MMNode(label: '目標A', icon: Icons.emoji_flags_outlined, pos: Offset(w * 0.46, h * 0.32));
-              final goal2 = _MMNode(label: '目標B', icon: Icons.emoji_flags_outlined, pos: Offset(w * 0.46, h * 0.68));
+              final dream = _MMNode(
+                  label: '夢',
+                  icon: Icons.lightbulb_outline,
+                  pos: Offset(w * 0.18, h * 0.5));
+              final goal1 = _MMNode(
+                  label: '目標A',
+                  icon: Icons.emoji_flags_outlined,
+                  pos: Offset(w * 0.46, h * 0.32));
+              final goal2 = _MMNode(
+                  label: '目標B',
+                  icon: Icons.emoji_flags_outlined,
+                  pos: Offset(w * 0.46, h * 0.68));
               // TODO は目標ごとに一列（同一X）に配置し、等間隔で構造的に並べる
               final todoX1 = w * 0.76;
               final todoY1 = [h * 0.18, h * 0.30, h * 0.42];
               final todos1 = <_MMNode>[
                 for (final yy in todoY1)
-                  _MMNode(label: 'TODO', icon: Icons.check_circle_outline, pos: Offset(todoX1, yy)),
+                  _MMNode(
+                      label: 'TODO',
+                      icon: Icons.check_circle_outline,
+                      pos: Offset(todoX1, yy)),
               ];
               final todoX2 = w * 0.76;
               final todoY2 = [h * 0.58, h * 0.70, h * 0.82];
               final todos2 = <_MMNode>[
                 for (final yy in todoY2)
-                  _MMNode(label: 'TODO', icon: Icons.check_circle_outline, pos: Offset(todoX2, yy)),
+                  _MMNode(
+                      label: 'TODO',
+                      icon: Icons.check_circle_outline,
+                      pos: Offset(todoX2, yy)),
               ];
-              final nodes = <_MMNode>[dream, goal1, goal2, ...todos1, ...todos2];
+              final nodes = <_MMNode>[
+                dream,
+                goal1,
+                goal2,
+                ...todos1,
+                ...todos2
+              ];
               final edges = <(_MMNode, _MMNode)>[
                 (dream, goal1),
                 (dream, goal2),
@@ -396,7 +439,8 @@ class _NodeDiagramState extends State<_NodeDiagram> with SingleTickerProviderSta
                     // Edges
                     Positioned.fill(
                       child: CustomPaint(
-                        painter: _MindMapEdgesPainter(edges: edges, t: _anim.value),
+                        painter:
+                            _MindMapEdgesPainter(edges: edges, t: _anim.value),
                       ),
                     ),
                     // Nodes
@@ -435,7 +479,8 @@ class _MindMapEdgesPainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     final accent = Paint()
-      ..color = DT.brandPrimary.withOpacity(0.25 + 0.35 * (0.5 + 0.5 * math.sin(t * 2 * math.pi)))
+      ..color = DT.brandPrimary
+          .withOpacity(0.25 + 0.35 * (0.5 + 0.5 * math.sin(t * 2 * math.pi)))
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
     for (final e in edges) {
@@ -451,7 +496,8 @@ class _MindMapEdgesPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MindMapEdgesPainter old) => old.t != t || old.edges != edges;
+  bool shouldRepaint(covariant _MindMapEdgesPainter old) =>
+      old.t != t || old.edges != edges;
 }
 
 class _MindMapNode extends StatelessWidget {
@@ -552,7 +598,10 @@ class _SwipeGuideState extends State<_SwipeGuide> {
             ),
           const SizedBox(height: 16),
           Text('カードを左右にスワイプして体験できます',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: DT.textSecondary)),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: DT.textSecondary)),
           const SizedBox(height: 8),
           // Interactive demo with strong backgrounds
           Center(
@@ -566,14 +615,18 @@ class _SwipeGuideState extends State<_SwipeGuide> {
                 secondaryBackground: _swipeBg(false),
                 child: Card(
                   elevation: 1,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DT.radiusL)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(DT.radiusL)),
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
                       children: [
                         const Icon(Icons.task_alt, color: DT.textSecondary),
                         const SizedBox(width: 12),
-                        Expanded(child: Text(t, style: Theme.of(context).textTheme.titleMedium)),
+                        Expanded(
+                            child: Text(t,
+                                style:
+                                    Theme.of(context).textTheme.titleMedium)),
                       ],
                     ),
                   ),
@@ -642,7 +695,8 @@ class _SwipeInfoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   Text(
                     isLeft ? '今週はやらない項目を左へ' : '今週やる項目を右へ',
@@ -694,14 +748,17 @@ class _WeeklyReset extends StatefulWidget {
   State<_WeeklyReset> createState() => _WeeklyResetState();
 }
 
-class _WeeklyResetState extends State<_WeeklyReset> with SingleTickerProviderStateMixin {
+class _WeeklyResetState extends State<_WeeklyReset>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ac;
   late final Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _ac = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _ac = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat(reverse: true);
     _anim = CurvedAnimation(parent: _ac, curve: Curves.easeInOut);
   }
 
@@ -720,7 +777,8 @@ class _WeeklyResetState extends State<_WeeklyReset> with SingleTickerProviderSta
           animation: _anim,
           builder: (_, __) => Card(
             elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(DT.radiusL)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DT.radiusL)),
             child: Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
@@ -728,7 +786,8 @@ class _WeeklyResetState extends State<_WeeklyReset> with SingleTickerProviderSta
                 children: [
                   Icon(Icons.calendar_month, size: 56, color: DT.brandPrimary),
                   const SizedBox(height: 12),
-                  Text('また新しい週が始まる', style: Theme.of(context).textTheme.titleMedium),
+                  Text('また新しい週が始まる',
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
